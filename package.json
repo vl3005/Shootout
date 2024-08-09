@@ -1,9 +1,1 @@
-{
-  "dependencies": {
-    "express": "4.18.2",
-    "socket.io": "4.6.1"
-  },
-  "devDependencies": {
-    "eslint": "^9.5.0"
-  }
-}
+{"type":"modules","dependencies":{"express":"^4.19.2","socket.io":"^4.7.5"},"devDependencies":{"eslint":"^9.5.0"}}

@@ -1,26 +1,109 @@
 class Projectile {
-  constructor({x, y, radius, color='white', velocity}) {
+  constructor({x, y, radius, color='white', willHit, speed, velocity, angle, id}) {
     this.x = x
     this.y = y
+    this.willHit = willHit
     this.radius = radius
     this.color = color
+    this.strokeColor = this.invertHexColor(this.color)
     this.velocity = velocity
+    this.speed = speed
+    this.angle = angle
+    this.hasRicocheted = false
+    this.distanceTraveled = 0;    
+    this.maxDistance = window.canvasDiag-30;
+    this.maxDamage = 24;
+    this.distanceRatio = 0;
+    this.ricochetPens = 0;
+    this.damage = this.maxDamage;
+    this.id = id
+    this.isSpent = false;
+    this.opacity = 1
+  }
+
+  invertColor(r, g, b) {
+    return {
+      r: 255 - r,
+      g: 255 - g,
+      b: 255 - b
+    };
+  }
+
+  hexToRgb(hex) {
+    const bigint = parseInt(hex.slice(1), 16);
+    return {
+      r: (bigint >> 16) & 255,
+      g: (bigint >> 8) & 255,
+      b: bigint & 255
+    };
+  }
+
+  rgbToHex(r, g, b) {
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  }
+
+  invertHexColor(hex) {
+    const { r, g, b } = this.hexToRgb(hex);
+    const invertedColor = this.invertColor(r, g, b);
+    return this.rgbToHex(invertedColor.r, invertedColor.g, invertedColor.b);
   }
 
   draw() {
     c.save()
     c.shadowColor = this.color
-    c.shadowBlur = 200
+    c.shadowBlur = 20
     c.beginPath()
     c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false)
+    c.fillStyle = this.color
+    c.fill()
+    c.beginPath()
+    c.arc(this.x - Math.cos(this.angle) * 5, this.y - Math.sin(this.angle) * 5, this.radius*0.8, 0, Math.PI * 2, false)
+    c.fillStyle = this.color
+    c.fill()
+    c.beginPath()
+    c.arc(this.x - Math.cos(this.angle) * 8, this.y - Math.sin(this.angle) * 8, this.radius*0.5, 0, Math.PI * 2, false)
+    c.fillStyle = this.color
+    c.fill()
+    c.beginPath()
+    c.arc(this.x - Math.cos(this.angle) * 10, this.y - Math.sin(this.angle) * 10, this.radius*0.3, 0, Math.PI * 2, false)
     c.fillStyle = this.color
     c.fill()
     c.restore()
   }
 
-  update() {
-    this.draw()
-    this.x = this.x + this.velocity.x
-    this.y = this.y + this.velocity.y
+  drawHitSprite(text) {
+    if (this.opacity > 0) {
+      c.globalAlpha = this.opacity
+      let fontSize = 30 * (this.damage / this.maxDamage)
+      if (fontSize<18) fontSize = 18
+      c.font = `600 ${fontSize}px Stick No Bills`
+      c.textAlign = 'center'
+      c.textBaseline='middle'
+      c.fillStyle = `hsla(360, 100%, ${Math.min(100,40/(this.damage/this.maxDamage))}%, 1)`
+      c.strokeStyle = 'black'
+      c.lineWidth = 3
+      c.strokeText(String(text), this.x, this.y)
+      c.fillText(String(text), this.x, this.y)
+    }
   }
+
+  update() {
+    if (!this.isSpent) {
+    this.distanceTraveled += this.speed
+    this.distanceRatio = Math.min(1,this.distanceTraveled/this.maxDistance)
+    this.damage = Math.round(Math.max(this.maxDamage / 8, this.maxDamage *
+      (1 - 0.7 * this.distanceRatio - 0.2 * this.ricochetPens)))
+      if (this.distanceTraveled >= this.maxDistance) {
+        let id = this.id
+        this.isSpent = true
+        SOCKET.emit('spentProjectile', { id })
+      }
+    }
+    //if (this.hasRicocheted) {      
+    //  this.hasRicocheted = false
+    //  this.angle = Math.atan2(this.velocity.y, this.velocity.x)
+    //}
+    this.draw()
+  }
+  
 }
