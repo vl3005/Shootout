@@ -37,6 +37,12 @@ window.sounds = {
     volume: 0.2,
     html5: true
   }),
+  vortex: new Howl({
+    src: ['../audio/vortex.wav'],
+    volume: 0.3,
+    loop: false,
+    html5: true
+  }),
   shieldUp: new Howl({
     src: ['../audio/shieldUp.wav'],
     volume: 0.5,
@@ -45,12 +51,12 @@ window.sounds = {
   }),
   noShield: new Howl({
     src: ['../audio/noShield.wav'],
-    volume: 0.5,
+    volume: 0.8,
     loop: true,
     html5: true
   }),
   die: new Howl({
-    src: ['../audio/death2.wav'],
+    src: ['../audio/death3.wav'],
     volume: 0.5,
     html5: true
   }),

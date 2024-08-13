@@ -1,0 +1,124 @@
+class Sprite {
+  constructor({image, x, y, frameCount, startFrame=0, looped = false, rotate = false, colorize = 0, OffsetX=0,OffsetY=0, width, height, rows = 1, cols = 1, drawnWidth, drawnHeight}) {
+    this.image = image
+    this.frameCount = frameCount;
+    this.width = width;
+    this.rand = 0;
+    this.angle = 0;
+    this.OffsetX = OffsetX
+    this.OffsetY = OffsetY
+    this.looped = looped
+    this.height = height;
+    this.startFrame = startFrame
+    this.drawnHeight = drawnHeight
+    this.drawnWidth = drawnWidth
+    this.x = x + this.OffsetX - drawnWidth / 2;
+    this.y = y + this.OffsetY - drawnHeight / 2;
+    this.rows = rows;
+    this.rotate = rotate
+    this.cols = cols;
+    this.finished = false;
+    this.colorize = colorize
+    this.currentFrame = startFrame;
+  }
+
+  draw() {
+    const col = this.currentFrame % this.cols;
+    const row = Math.floor(this.currentFrame / this.cols);
+    const frameX = col * this.width;
+    const frameY = row * this.height;
+    
+    c.save()    
+    if (this.rotate) {
+      c.translate(this.x, this.y);
+      c.rotate(this.angle)    
+      c.drawImage(
+        this.image,
+        frameX, frameY,
+        this.width, this.height,
+        this.OffsetX -this.drawnWidth / 2, this.OffsetY - this.drawnHeight / 2,
+        this.drawnWidth, this.drawnHeight
+      );
+      if (this.colorize) {
+        c.globalAlpha = 0.8
+        c.globalCompositeOperation = 'source-atop'; // Ensures the color is applied only to the image
+        c.fillStyle = this.colorize; // 
+        c.fillRect(this.OffsetX - this.drawnWidth / 2, this.OffsetY - this.drawnHeight / 2, this.drawnWidth, this.drawnHeight);
+        //c.fillRect(0,0, canvas.width, canvas.height);
+
+        // Step 3: Reset the composite operation to default
+        c.globalCompositeOperation = 'source-over'; // This is the default value
+      }
+    } else{
+    c.drawImage(
+      this.image,
+      frameX, frameY,
+      this.width, this.height,
+      this.x + this.OffsetX - this.drawnWidth / 2, this.y + this.OffsetY - this.drawnHeight / 2,
+      this.drawnWidth, this.drawnHeight
+      );
+      if (this.colorize) {
+        c.globalAlpha = 0.8
+        c.globalCompositeOperation = 'source-atop';  
+        c.fillStyle = this.colorize; 
+        c.fillRect(this.x + this.OffsetX - this.drawnWidth / 2, this.y + this.OffsetY - this.drawnHeight / 2, this.drawnWidth, this.drawnHeight);
+
+        c.globalCompositeOperation = 'source-over';
+      }
+    }
+
+    c.restore()
+
+    this.currentFrame++;
+    if (this.currentFrame >= this.frameCount) {
+      if (!this.looped) {        
+        this.finished = true; // Mark as finished if not looped
+      }
+      this.currentFrame=this.startFrame
+    }
+  }
+
+
+  resetSprite(x, y, angle=0,colorize=0) {
+    this.angle = angle
+    this.currentFrame = this.startFrame
+    this.colorize = colorize
+    this.x = x //+ this.OffsetX //- this.drawnWidth / 2
+    this.y = y //+ this.OffsetY //- this.drawnHeight / 2
+    this.finished = false
+  }
+
+  clone() {
+    // Create a new Sprite with the current properties
+    return new Sprite({ image:this.image, x:this.x, y:this.y, frameCount:this.frameCount, startFrame:this.startFrame, looped:this.looped, rotate:this.rotate, OffsetX:this.OffsetX, OffsetY:this.OffsetY, width: this.width, height: this.height, rows:this.rows, cols: this.cols, drawnWidth: this.drawnWidth, drawnHeight: this.drawnHeight });
+  }
+}
+const explosion = new Image()
+explosion.src = '../../img/Effect_Explosion2_1_355x365.png'
+explosion.onload = function () { console.log('Explosion loaded') }
+const explSprite = new Sprite({image: explosion, x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 120,drawnHeight: 124})
+
+const smallHit = new Image()
+smallHit.src = '../../img/Effect_SmallHit_1_516x463.png'
+smallHit.onload = function () { console.log('smallHit loaded') }
+const smlHitSprite = new Sprite({ image: smallHit, x: 0, y: 0, frameCount: 29, startFrame: 2, looped: false, rotate: true, OffsetX: 13, width: 516, height: 463, rows: 7, cols: 9, drawnWidth: 89, drawnHeight: 80})
+
+const impact = new Image()
+impact.src = '../../img/Effect_Impact_1_305x383.png'
+impact.onload = function () { console.log('impact loaded') }
+const impSprite = new Sprite({ image: impact, x: 0, y: 0, frameCount: 29, startFrame: 1, looped: false, rotate: true, OffsetX: 0, OffsetY: 0, width: 305,height: 383,rows: 3,cols: 9,drawnWidth: 50,drawnHeight: 63})
+
+const vortex = new Image()
+vortex.src = '../../img/Effect_TheVortex_1_429x429.png'
+vortex.onload = function () { console.log('vortex loaded') }
+const vrtxSprite = new Sprite({ image: vortex, x: 0, y: 0, frameCount: 48, startFrame: 2, looped: false, rotate: false, width: 429, height: 429, rows: 6, cols: 9, drawnWidth: 120, drawnHeight: 120 })
+
+
+const trail = new Image()
+trail.src = '../../img/Effect_PowerChords_1_517x353.png'
+trail.onload = function () { console.log('trail loaded') }
+const trSprite = new Sprite({ image: trail, x: 0, y: 0, frameCount: 60, startFrame: 0, looped: true, OffsetY:-17,rotate: true, width: 517, height: 353, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
+
+const projAura = new Image()
+projAura.src = '../../img/Effect_EldenRing_1_421x425.png'
+projAura.onload = function () { console.log('projAura loaded') }

@@ -8,7 +8,7 @@ let playerPosition
 let angle
 
 window.addEventListener('keydown', (event) => {
-  if (!FENDPLAYERS[SOCKET.id] || FENDPLAYERS[SOCKET.id].isDead) return
+  if (!thisPlayer || thisPlayer.isDead) return
   //if (event.code == 'KeyW' || event.code == 'KeyA' ||
   //  event.code == 'KeyS' || event.code == 'KeyD' &&
   //if (!Object.values(keys).every(key => key.pressed === false) &&    
@@ -62,8 +62,8 @@ window.addEventListener('keydown', (event) => {
           return
   }  
   if (keyHeld) {
-    clearInterval(FENDPLAYERS[SOCKET.id].energyReplenish)
-    FENDPLAYERS[SOCKET.id].energyReplenish = null
+    clearInterval(thisPlayer.energyReplenish)
+    thisPlayer.energyReplenish = null
     
     if (!sounds.move.playing(MOVESOUND[SOCKET.id])) {
       MOVESOUND[SOCKET.id] = sounds.move.play()      
@@ -75,7 +75,7 @@ window.addEventListener('keydown', (event) => {
 
 
 window.addEventListener('keyup', (event) => {
-  if (!FENDPLAYERS[SOCKET.id] || FENDPLAYERS[SOCKET.id].isDead) return
+  if (!thisPlayer || thisPlayer.isDead) return
 
   switch (event.code) {
     case 'Tab':
@@ -112,19 +112,19 @@ window.addEventListener('keyup', (event) => {
     KEYS.s.pressed == false &&
     KEYS.d.pressed == false) {
     console.log()
-    if (!FENDPLAYERS[SOCKET.id].energy > 0)  // If player's energy drops below zero from movement spending, bring it back to 0
-      FENDPLAYERS[SOCKET.id].energy = 0
+    if (!thisPlayer.energy > 0)  // If player's energy drops below zero from movement spending, bring it back to 0
+      thisPlayer.energy = 0
 
     if (sounds.move.playing(MOVESOUND[SOCKET.id])) {
       sounds.move.fade(0.4, 0.02, 300, MOVESOUND[SOCKET.id])
 
     }
-    FENDPLAYERS[SOCKET.id].moveAngle += Math.PI
-    FENDPLAYERS[SOCKET.id].moveAngle %= 2*Math.PI    
-    if (FENDPLAYERS[SOCKET.id].energyReplenish == null && energyRepBuffer == null) {
+    thisPlayer.moveAngle += Math.PI
+    thisPlayer.moveAngle %= 2*Math.PI    
+    if (thisPlayer.energyReplenish == null && energyRepBuffer == null) {
       energyRepBuffer = setTimeout(() => { 
-      FENDPLAYERS[SOCKET.id].energyReplenish = setInterval(() => {
-        FENDPLAYERS[SOCKET.id].replenishEnergy()
+      thisPlayer.energyReplenish = setInterval(() => {
+        thisPlayer.replenishEnergy()
       }, 75)        
         energyRepBuffer = null
       },900)
@@ -154,47 +154,44 @@ document.addEventListener('blur', () => {
 //    moveCrosshair = false;
 //  }
 //}
-
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function emitShoot() {
   //const { top, left } = canvas.getBoundingClientRect()
-  if (FENDPLAYERS[SOCKET.id].energy < ENERGYCOSTS.shoot)
+  if (thisPlayer.energy < ENERGYCOSTS.shoot)
     sounds.lowEnergy.play()
-  while (holdFireButton && FENDPLAYERS[SOCKET.id].energy >= ENERGYCOSTS.shoot) {
+  while (holdFireButton && thisPlayer.energy >= ENERGYCOSTS.shoot && !thisPlayer.isDead) {
     justClicked = true
-    clearInterval(FENDPLAYERS[SOCKET.id].reloadInt)
-    FENDPLAYERS[SOCKET.id].cannonRadius = 0
-
-    if (!FENDPLAYERS[SOCKET.id].isRespawning) {
-      clearInterval(FENDPLAYERS[SOCKET.id].energyReplenish)
-      FENDPLAYERS[SOCKET.id].energyReplenish = null
+    clearInterval(thisPlayer.reloadInt)
+    thisPlayer.cannonRadius = 0
+    if (!thisPlayer.isRespawning) {
+      clearInterval(thisPlayer.energyReplenish)
+      thisPlayer.energyReplenish = null
       clearTimeout(energyRepBuffer)
-      FENDPLAYERS[SOCKET.id].energy -= ENERGYCOSTS.shoot
+      thisPlayer.energy -= ENERGYCOSTS.shoot
     }
-    FENDPLAYERS[SOCKET.id].reload(RELOADTIME, ENERGYCOSTS.shoot)
+    thisPlayer.reload(RELOADTIME, ENERGYCOSTS.shoot)
     //if (!moveCrosshair) {playerPosition = {
-    //  x: FENDPLAYERS[SOCKET.id].x,
-    //  y: FENDPLAYERS[SOCKET.id].y
+    //  x: thisPlayer.x,
+    //  y: thisPlayer.y
     //}
     //calcAimData()  
     //}
-    if (FENDPLAYERS[SOCKET.id].energy < ENERGYCOSTS.shoot)
+    if (thisPlayer.energy < ENERGYCOSTS.shoot)
       sounds.gunDead.play()
     energyRepBuffer = setTimeout(() => {
-      if (FENDPLAYERS[SOCKET.id].energyReplenish == null)
-        FENDPLAYERS[SOCKET.id].energyReplenish = setInterval(() => {
-          FENDPLAYERS[SOCKET.id].replenishEnergy()
+      if (!thisPlayer.isDead && !thisPlayer.energyReplenish)
+        thisPlayer.energyReplenish = setInterval(() => {
+          thisPlayer.replenishEnergy()
         }, 75)
       energyRepBuffer = null
     }, 1900)
     SOCKET.emit('shoot', {
       x: playerPosition.x,
       y: playerPosition.y,
-      angle: FENDPLAYERS[SOCKET.id].aimAngle,
+      angle: thisPlayer.aimAngle,
       PROJ_SPEED
     })
 
@@ -206,12 +203,12 @@ async function emitShoot() {
 
 
 canvas.addEventListener('mousemove', (event) => {
-  if (FENDPLAYERS[SOCKET.id]){
-  MOUSEPOSITION.x = event.clientX
-  MOUSEPOSITION.y = event.clientY
+  if (thisPlayer) {
+    MOUSEPOSITION.x = event.clientX
+    MOUSEPOSITION.y = event.clientY
   }
-   
- 
+
+
 })
 
 //canvas.addEventListener('mouseleave', stopMoving);
@@ -222,12 +219,11 @@ window.addEventListener('beforeunload', () => {
 })
 
 canvas.addEventListener('mousedown', (event) => {
-  if (FENDPLAYERS[SOCKET.id]) {
-    switch (event.button)
-    {
-    case 0:
+  if (thisPlayer) {
+    switch (event.button) {
+      case 0:
         {
-          if (FENDPLAYERS[SOCKET.id].isDead || justClicked) return
+          if (thisPlayer.isDead || justClicked) return
           else if (!justClicked && !holdFireButton) {
             setTimeout(() => { justClicked = false }, RELOADTIME)
             holdFireButton = true
@@ -236,10 +232,11 @@ canvas.addEventListener('mousedown', (event) => {
             //MOUSEPOSITION.y = event.clientY
             //calcAimData(event)
             emitShoot()
-    }}}
+          }
+        }
+    }
   }
 })
-    
 
 addEventListener('mouseup', () => {
   //stopMoving()

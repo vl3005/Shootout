@@ -1,4 +1,4 @@
-const friction = 0.98
+const friction = 0.99
 class Particle {
   constructor({x, y, radius, color, velocity, alpha =1}) {
     this.x = x

@@ -1,17 +1,20 @@
 class Projectile {
-  constructor({x, y, radius, color='white', willHit, speed, velocity, angle, id}) {
+  constructor({x, y, radius,craft, color='white', willHit, speed, velocity, angle, id}) {
     this.x = x
     this.y = y
     this.willHit = willHit
     this.radius = radius
+    this.craft = craft
     this.color = color
     this.strokeColor = this.invertHexColor(this.color)
     this.velocity = velocity
     this.speed = speed
     this.angle = angle
+    this.bAngle = 0;
+    this.trail = new Sprite(trail, 0, 0, 60,0, true, 517, 353, 7, 9, 29, 50)
     this.hasRicocheted = false
     this.distanceTraveled = 0;    
-    this.maxDistance = window.canvasDiag-30;
+    this.maxDistance = window.canvasDiag-40;
     this.maxDamage = 24;
     this.distanceRatio = 0;
     this.ricochetPens = 0;
@@ -49,26 +52,45 @@ class Projectile {
   }
 
   draw() {
+        
+    //c.save()    
+    //c.translate(this.trail.x, this.trail.y)    
+    //c.rotate(this.angle)    
+    //this.trail.draw()
+    //c.restore()
     c.save()
-    c.shadowColor = this.color
-    c.shadowBlur = 20
     c.beginPath()
+    c.shadowBlur = 4 + 2 * this.distanceRatio
+    c.shadowColor = this.craft.sColor   
     c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false)
-    c.fillStyle = this.color
+    c.fillStyle = this.craft.mColor
     c.fill()
+    c.fillStyle = this.gradient    
+    c.fill()
+    c.closePath()    
     c.beginPath()
     c.arc(this.x - Math.cos(this.angle) * 5, this.y - Math.sin(this.angle) * 5, this.radius*0.8, 0, Math.PI * 2, false)
-    c.fillStyle = this.color
+    c.fillStyle = this.craft.sColor   
+    c.fill()
+    c.fillStyle = this.gradient
+    c.closePath()
     c.fill()
     c.beginPath()
     c.arc(this.x - Math.cos(this.angle) * 8, this.y - Math.sin(this.angle) * 8, this.radius*0.5, 0, Math.PI * 2, false)
-    c.fillStyle = this.color
+    c.fillStyle = this.craft.sColor   
+    c.fill()
+    c.fillStyle = this.gradient
+    c.closePath()
     c.fill()
     c.beginPath()
     c.arc(this.x - Math.cos(this.angle) * 10, this.y - Math.sin(this.angle) * 10, this.radius*0.3, 0, Math.PI * 2, false)
-    c.fillStyle = this.color
+    c.fillStyle = this.craft.sColor   
+    c.fill()
+    c.fillStyle = this.gradient
+    c.closePath()
     c.fill()
     c.restore()
+    
   }
 
   drawHitSprite(text) {
@@ -88,6 +110,17 @@ class Projectile {
   }
 
   update() {
+    this.gradient = c.createRadialGradient(
+      this.x + (this.radius) * Math.cos(this.bAngle),
+      this.y + (this.radius) * Math.sin(this.bAngle), this.radius,
+      this.x + (2 * this.radius) * Math.cos(this.bAngle),
+      this.y + (2 * this.radius) * Math.sin(this.bAngle), 1.5* this.radius)
+    this.gradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Shine effect at the start
+    this.gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)'); // Shine effect at the start
+    this.gradient.addColorStop(0.8, this.craft.mColor);               // Your color in the middle
+    this.gradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // Slightly darker at the end
+    this.gradient.addColorStop(0.92, 'rgba(32, 33, 33, 0.2)');                 // Slightly darker at the end
+    this.gradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');  
     if (!this.isSpent) {
     this.distanceTraveled += this.speed
     this.distanceRatio = Math.min(1,this.distanceTraveled/this.maxDistance)
@@ -99,6 +132,8 @@ class Projectile {
         SOCKET.emit('spentProjectile', { id })
       }
     }
+    this.trail.x = this.x
+    this.trail.y = this.y
     //if (this.hasRicocheted) {      
     //  this.hasRicocheted = false
     //  this.angle = Math.atan2(this.velocity.y, this.velocity.x)

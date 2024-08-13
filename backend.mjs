@@ -21,20 +21,21 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html')
 })
 
-
-const availableColors = [
-  '#6f7dfc'/*sky blue*/,
-  '#ffd700'/*gold yellow*/,
-  '#ff0d15'/*red*/,
-  '#18fc03'/*green*/,
-  '#ff84d4'/*baby pink*/,
-  '#f511a5'/*pink*/,
-  '#00ffd7'/*light teal*/,
-  '#d300e1'/*purple*/,
-  '#ff9e00'/*orange*/,
-  '#969696'/*silver*/,
-  '#947944'/*tan*/,
-  '#ffffff'/*white*/] 
+const crafts = [
+  { name: 'Void Raptor',      mColor: '#000000', /* Black */        sColor: '#f54242', aColor: '#000000', inUse: false },
+  { name: 'Strato-Seeker',    mColor: '#6f7dfc', /* Sky blue */     sColor: '#42f55a', aColor: '#000000', inUse: false },
+  { name: 'Solar Falcon',     mColor: '#ffd700', /* Gold Yellow */  sColor: '#7dabf5', aColor: '#000000', inUse: false },
+  { name: 'Crimson Comet',    mColor: '#ff0d15', /* Red */          sColor: '#ffd700', aColor: '#000000', inUse: false },
+  { name: 'Emerald Vortex',   mColor: '#18fc03', /* Green */        sColor: '#ffffff', aColor: '#000000', inUse: false },
+  { name: 'Nebula Blossom',   mColor: '#ff84d4', /* Baby Pink */    sColor: '#7dabf5', aColor: '#000000', inUse: false },
+  { name: 'Stellar Rose',     mColor: '#ff84d4', /* Pink */         sColor: '#18fc03', aColor: '#000000', inUse: false },
+  { name: 'Aqua Spirit',      mColor: '#00ffd7', /* Light Teal */   sColor: '#f5f542', aColor: '#000000', inUse: false },
+  { name: 'Cosmic Mirage',    mColor: '#d300e1', /* Purple */       sColor: '#ffffff', aColor: '#000000', inUse: false },
+  { name: 'Nova Flare',       mColor: '#ff9e00', /* Orange */       sColor: '#dd28ed', aColor: '#000000', inUse: false },
+  { name: 'Lunar Phantom',    mColor: '#969696', /* Silver */       sColor: '#820004', aColor: '#000000', inUse: false },
+  { name: 'Arid Voyager',     mColor: '#947944', /* Tan */          sColor: '#f20515', aColor: '#000000', inUse: false },
+  { name: 'Galactic Spectre', mColor: '#000000', /* White */        sColor: '#05f205', aColor: '#000000', inUse: false },
+]
 
 const backEndPlayers = {}
 const backEndProjectiles = {}
@@ -49,8 +50,24 @@ let projectileId = 0
 let particleId = 0
 let dV;
 let velFacX;
-let newBAngle=0;
+let newBAngle=Math.random() * 2*Math.PI;
 let velFacY;
+
+function check2Big(num) {
+  if (num == Number.MAX_SAFE_INTEGER) {
+    return 0
+  }
+  else {
+    return num + 1
+
+  }
+}
+
+function siftArray(arr, property) {
+  return arr
+    .map((item, index) => item[property] === false ? index : -1) // Map to indices where property is false
+    .filter(index => index !== -1); // Filter out -1 values
+}
 
 io.on('connection', (SOCKET) => {
   let temp = SOCKET.handshake.address;
@@ -60,17 +77,17 @@ io.on('connection', (SOCKET) => {
     ip = temp.split(':').pop();  // Extract the IPv4 part
   } else ip = temp
 
-  console.log('New connection from IP:', ip);
+  console.log(`${formatDate(new Date(Date.now())) } - New connection from IP: ${ip}`);
   SOCKET.emit('getNewAngle', newBAngle)
 
   SOCKET.on('disconnecting', (reason) => {
-    console.log(`Disconnect event triggered for socket: ${SOCKET.id}, because ${reason}`);
+    console.log(`${formatDate(new Date(Date.now())) } - Disconnect event triggered for socket: ${SOCKET.id}, because ${reason}`);
 
     try {
-      availableColors.push(backEndPlayers[SOCKET.id].color);
-      console.log('got the color back', availableColors);
+      crafts[backEndPlayers[SOCKET.id].chosenCraftIndex].inUse = false
+      console.log(`${formatDate(new Date(Date.now()))} - Got the craft back ${backEndPlayers[SOCKET.id].craft.name}`);
     } catch (error) {
-      console.error('Error in disconnect handler:', error);
+      console.error(`${formatDate(new Date(Date.now())) } - Error in disconnect handler: ${error}`);
     }
     delete backEndPlayers[SOCKET.id];
   });
@@ -78,8 +95,9 @@ io.on('connection', (SOCKET) => {
   io.emit('updatePlayers', backEndPlayers)
 
   SOCKET.on('shoot', ({ x, y, angle, PROJ_SPEED }) => {
-    if (projectileId == Number.MAX_SAFE_INTEGER) projectileId = 0
-    else projectileId++
+    if (backEndPlayers[SOCKET.id]){
+    if (Object.keys(backEndProjectiles).length === 0) projectileId = 0
+    else projectileId = check2Big(projectileId)
     const velocity = {
       x: Math.cos(angle) * PROJ_SPEED,
       y: Math.sin(angle) * PROJ_SPEED
@@ -87,28 +105,32 @@ io.on('connection', (SOCKET) => {
     backEndProjectiles[projectileId] = {
       x, y, velocity, speed: PROJ_SPEED,
       playerId: SOCKET.id,
-      color: backEndPlayers[SOCKET.id].color,
+      craft: backEndPlayers[SOCKET.id].craft,
       hasRicocheted: false,
       isSpent: false,
       willHit: false,
-      hitDamage: 30,
+      isDead: false,
       ricochetPens: 0,
       radius: PROJECTILE_RADIUS,
       angle
+      }
     }
   })
   SOCKET.on('spentProjectile', ({ id }) => {
     if (backEndProjectiles[id])
     backEndProjectiles[id].isSpent = true
   })
-  SOCKET.on('updateHitDamage', ({ hitDamage, id }) => {
-    if(backEndProjectiles[id])
-      backEndProjectiles[id].hitDamage = hitDamage
-  })
+  SOCKET.on('onMap', () => {
+    if (backEndPlayers[SOCKET.id])
+    backEndPlayers[SOCKET.id].onMap = true
+  }) 
   SOCKET.on('updateShield', ({ shield, playerId, isReplenishing }) => {
     if (backEndPlayers[playerId]) {
       backEndPlayers[playerId].shield = shield
       backEndPlayers[playerId].isReplenishing = isReplenishing
+      console.log('shield updated', backEndPlayers[playerId].isReplenishing, isReplenishing)
+
+      SOCKET.broadcast.emit('updateShieldInt', { shield, playerId, isReplenishing });
     }
     });
   SOCKET.on('initGame', ({ width, height, x, y, username, FEdV, isDead = false, radius, isRespawning, RESPAWNTIME, playerSpeed }) => {
@@ -118,16 +140,25 @@ io.on('connection', (SOCKET) => {
     dV = FEdV
     activeDecInts[SOCKET.id] = { x: null, y: null }
     let rand = [];
+    let chosenCraftIndex = 0;
     for (let i = 0; i < 24; i++) rand.push(Math.random())
+    const availableCraftsInd = siftArray(crafts, 'inUse')
+    console.log(availableCraftsInd)
+    console.log(crafts)
+    if (availableCraftsInd.length > 0) {
+      chosenCraftIndex = availableCraftsInd[Math.floor(Math.random() * availableCraftsInd.length)]      
+    } else return 
     backEndPlayers[SOCKET.id] = {
       x,
       y,
-      color: availableColors[Math.round(Math.random() * (availableColors.length - 1))],
+      craft: crafts[chosenCraftIndex],
+      chosenCraftIndex,
       sequenceNumber: 0,
       score: 0,
       username,
       text: username,
-      isDead,
+      isDead,      
+      onMap: false,
       ip,
       thrusterOutput:0,
       xDecInterval: 0,
@@ -146,8 +177,8 @@ io.on('connection', (SOCKET) => {
       isReplenishing: null,
       rand
     }
-    console.log(`${backEndPlayers[SOCKET.id].ip}'s name is ${backEndPlayers[SOCKET.id].username}'`)
-    availableColors.splice(availableColors.indexOf(backEndPlayers[SOCKET.id].color), 1)
+    crafts[chosenCraftIndex].inUse = true
+    console.log(`${ formatDate(new Date(Date.now()))} - ${backEndPlayers[SOCKET.id].ip}'s name is ${backEndPlayers[SOCKET.id].username}`)
     backEndRespawnTime = RESPAWNTIME   
 
 
@@ -159,9 +190,14 @@ io.on('connection', (SOCKET) => {
     backEndPlayers[SOCKET.id].angle = angle
   })
   SOCKET.on('updateCannonRadius', (cannonRadius) => {
-    if (backEndPlayers[SOCKET.id].isDead || !backEndPlayers[SOCKET.id]) {
-      clearInterval(activeDecInts[id].y)
-      activeDecInts[id].y = null
+    if (!backEndPlayers[SOCKET.id] ||backEndPlayers[SOCKET.id].isDead) {
+      try {
+        clearInterval(activeDecInts[SOCKET.id].y)
+        activeDecInts[SOCKET.id].y = null
+        clearInterval(activeDecInts[SOCKET.id].x)
+        activeDecInts[SOCKET.id].x = null
+      }
+      catch { console.error('Dude, what?') }
       return
     }
     backEndPlayers[SOCKET.id].cannonRadius = cannonRadius
@@ -215,7 +251,7 @@ io.on('connection', (SOCKET) => {
         backEndPlayers[SOCKET.id].x = x
         break
     }
-
+    SOCKET.broadcast.emit('updateThruster', ({Thruster:backEndPlayers[SOCKET.id].thrusterOutput, id:SOCKET.id}))
     const playerSides = {
       left: backEndPlayer.x - backEndPlayer.radius,
       top: backEndPlayer.y - backEndPlayer.radius,
@@ -282,7 +318,7 @@ io.on('connection', (SOCKET) => {
       case 'KeyW':
         clearInterval(activeDecInts[id].y)
         activeDecInts[id].y = null        
-        tempYSpeed = backEndPlayers[id].playerSpeed.y
+        tempYSpeed = backEndPlayers[id].playerSpeed.y        
         SOCKET.emit('decelerating', ({ DecelY: true }))
         activeDecInts[id].y = setInterval(() => {
           if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
@@ -291,7 +327,9 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.y += dV
-          SOCKET.emit('updateSpeed', (backEndPlayers[id].playerSpeed))
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedY && backEndPlayers[id].y - backEndPlayers[id].radius <= 0) {
             changedY = true
             factorY = -1
@@ -308,7 +346,6 @@ io.on('connection', (SOCKET) => {
             backEndPlayers[id].playerSpeed.y = 0
           } else { }
           tempYSpeed = backEndPlayers[id].playerSpeed.y 
-          
         }, 15)
           break
       case 'KeyA':
@@ -323,7 +360,9 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.x += dV
-          SOCKET.emit('updateSpeed', (backEndPlayers[id].playerSpeed))
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedX && backEndPlayers[id].x - backEndPlayers[id].radius < 0) {
             changedX = true
             factorX = -1
@@ -340,7 +379,6 @@ io.on('connection', (SOCKET) => {
               backEndPlayers[id].playerSpeed.x = 0
             } else { }          
           tempXSpeed = backEndPlayers[id].playerSpeed.x 
-          
         }, 15)      
           break
       case 'KeyS':
@@ -355,7 +393,9 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.y -= dV
-          SOCKET.emit('updateSpeed', (backEndPlayers[id].playerSpeed))
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedY && backEndPlayers[id].y + backEndPlayers[id].radius >= canvas.height) {
             changedY = true
             factorY = -1
@@ -387,7 +427,9 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.x -= dV
-          SOCKET.emit('updateSpeed', (backEndPlayers[id].playerSpeed))
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedX && backEndPlayers[id].x + backEndPlayers[id].radius >= canvas.width) {
             changedX = true
             factorX = -1
@@ -424,8 +466,8 @@ function createParticles(array, projectile,target,min, range, velFacX = 80, velF
     else if (velFacY < 2 * PROJECTILE_RADIUS) thisVelFacY = 1
     else thisVelFacY = Math.pow(-1, Math.round(Math.random() + 2))
     let randomX = Math.random() * thisVelFacX
-    if (particleId == Number.MAX_SAFE_INTEGER) particleId = 0   // In the very rare off-chance that somehow the game is being played a verrrry long time
-    else particleId++
+    if (Object.keys(backEndParticles).length === 0) particleId = 0
+    else particleId = check2Big(particleId)
     array[particleId] = {
       x: target.x + projectile.velocity.x*0.5,
       y: target.y + projectile.velocity.y * 0.5,
@@ -449,7 +491,7 @@ async function countRespawn(playerId) {
   for (let i = backEndRespawnTime; i > 0; i--) {
     if (!backEndPlayers[playerId]) break;
     backEndPlayers[playerId].text = `[ ${i} ]`;
-
+    io.emit('updateText', ({text: backEndPlayers[playerId].text, playerId}))
     if (i > 1) { 
       await sleep(1000); // Pause for 1 second
     } else {
@@ -457,6 +499,7 @@ async function countRespawn(playerId) {
       for (let j = 1; j > 0.1; j -= 0.1) {
         if (!backEndPlayers[playerId]) break;
         backEndPlayers[playerId].text = `[${j.toFixed(1)}]`; // Format to 1 decimal place
+        io.emit('updateText', ({ text: backEndPlayers[playerId].text, playerId }))
         await sleep(100);
       }
       break; // Exit outer loop after finishing tenths of seconds countdown
@@ -504,15 +547,16 @@ setInterval(() => {
               velFacX = backEndProjectiles[id].x
               velFacY = backEndProjectiles[id].y
 
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 5, 2, velFacX, velFacY, PROJECTILE_RADIUS, backEndProjectiles[id].color)
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 5, 2, velFacX, velFacY, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor)
               io.emit('updateParticles', { backEndParticles, randomI: Math.random() })            
+              backEndProjectiles[id].isDead = true              
+              io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION.side, id })
               delete backEndProjectiles[id]
-              io.emit('updateProjectiles', { backEndProjectiles, randomI: Math.random() })
               break
           } else {
             backEndProjectiles[id].hasRicocheted = true
             backEndProjectiles[id].ricochetPens++
-            console.log('rico', backEndProjectiles[id].hasRicocheted, backEndProjectiles[id].ricochetPens)
+            //console.log('rico', backEndProjectiles[id].hasRicocheted, backEndProjectiles[id].ricochetPens)
             switch (COLLISION.side) {
               case 'left':
                 if (backEndProjectiles[id].velocity.x < 0)
@@ -532,7 +576,7 @@ setInterval(() => {
               break
             }
             backEndProjectiles[id].angle = Math.atan2(backEndProjectiles[id].velocity.y, backEndProjectiles[id].velocity.x)
-            io.emit('updateProjectiles', { backEndProjectiles, randomI: Math.random() })
+            io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION.side, id })
             backEndProjectiles[id].hasRicocheted = false
             break
           }
@@ -543,23 +587,24 @@ setInterval(() => {
 
         for (const playerId in backEndPlayers) {
           const backEndPlayer = backEndPlayers[playerId]
-          const SAFE_DISTANCE = PROJECTILE_RADIUS + backEndPlayer.radius + 13 * (backEndPlayer.shield / 100)
+          const hitCircle = PROJECTILE_RADIUS + backEndPlayer.radius + 13 * (backEndPlayer.shield / 100)
           const DISTANCE = Math.floor(Math.hypot(backEndProjectiles[id].x - backEndPlayer.x,
             backEndProjectiles[id].y - backEndPlayer.y))
 
-          if (DISTANCE <= SAFE_DISTANCE && backEndProjectiles[id].playerId !== playerId &&
+          if (DISTANCE <= hitCircle && backEndProjectiles[id].playerId !== playerId &&
             !backEndPlayers[playerId].isDead && !backEndPlayers[playerId].isRespawning)
             if (backEndPlayer.shield <= 0) {
               backEndPlayers[backEndProjectiles[id].playerId].score++
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 3, 1, 500, 500, radius, backEndPlayers[playerId].color) // Particles of the player
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 6, 2, 500, 500, PROJECTILE_RADIUS, backEndProjectiles[id].color) // Particles of the projectile
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 3, 1, 500, 500, radius, backEndPlayers[playerId].craft.mColor) // Particles of the player
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 6, 2, 500, 500, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor) // Particles of the projectile
               io.emit('updateParticles', { backEndParticles })
+              backEndProjectiles[id].isDead = true
+              io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
               delete backEndProjectiles[id]
-              io.emit('updateProjectiles', { backEndProjectiles, randomI: Math.random() })
               backEndPlayers[playerId].isDead = true
               backEndPlayers[playerId].isRespawning = true
               countRespawn(playerId)
-              io.emit('playerDies', playerId)
+              io.emit('playerDies', {dyingPlayerId: playerId, rand1: Math.random()})
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return
                 backEndPlayers[playerId].isDead = false
@@ -573,15 +618,16 @@ setInterval(() => {
             }
             else {
               io.emit('playerHit', { rand1: Math.random(), rand2: Math.random(), playerId, id, shooterId: backEndProjectiles[id].playerId })
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 1, 3, 500, 500, PROJECTILE_RADIUS * 1.2, backEndProjectiles[id].color)
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 3, 4, 500, 500, PROJECTILE_RADIUS * 0.4, backEndPlayers[playerId].color)
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 1, 3, 500, 500, PROJECTILE_RADIUS * 1.2, backEndProjectiles[id].craft.mColor)
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 7, 3, 500, 500, PROJECTILE_RADIUS * 0.9, 'rgba(0, 30, 255, 1)')
               io.emit('updateParticles', { backEndParticles })
+              backEndProjectiles[id].isDead = true
+              io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
               delete backEndProjectiles[id]
-              io.emit('updateProjectiles', { backEndProjectiles, randomI: Math.random() })
               break
             }
           else  // If not within hit distance
-            io.emit('updateProjectiles', { backEndProjectiles, randomI: Math.random() })
+            io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), id })
         } // End of player Hit Detection loop
     }
 
@@ -597,21 +643,29 @@ setInterval(() => {
       switch (PLAYER_BARR_COLLISION.side) {
         case 'top':
           backEndPlayers[playerId].y = backEndPlayers[playerId].radius + 1
+          clearInterval(activeDecInts[playerId].y)
+          activeDecInts[playerId].y = null
           break
         case 'bottom':
           backEndPlayers[playerId].y = canvas.height - backEndPlayers[playerId].radius - 1
+          clearInterval(activeDecInts[playerId].y)
+          activeDecInts[playerId].y = null
           break
         case 'left':
           backEndPlayers[playerId].x = backEndPlayers[playerId].radius + 1
+          clearInterval(activeDecInts[playerId].x)
+          activeDecInts[playerId].x = null
           break
         case 'right':
           backEndPlayers[playerId].x = canvas.width - backEndPlayers[playerId].radius - 1
+          clearInterval(activeDecInts[playerId].x)
+          activeDecInts[playerId].x = null
           break
       }
     }
   }
 
-  newBAngle = (newBAngle + 0.0001) % (2 * Math.PI)
+  newBAngle = (newBAngle + 0.00005) % (2 * Math.PI)
   io.emit('getNewAngle', newBAngle)
   
   io.emit('updatePlayers', backEndPlayers)
@@ -620,12 +674,12 @@ setInterval(() => {
 
   // Format the duration to 4 decimal places
   const timerResult = durationInMilliseconds.toFixed(4);
-  let warnTime = 5
-  if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now())) } - Back end ticker execution time: ${timerResult} ms`);
+  let warnTime = 2
+  if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now())) } - Back end ticker execution time: ${timerResult} ms.`);
 }, 15)
 
 server.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
+  console.log(`${formatDate(new Date(Date.now())) } - Game server listening on port ${port}.`)
 })
 
-console.log('server did load fr fr')
+console.log(`${formatDate(new Date(Date.now())) } - Server loaded.`)

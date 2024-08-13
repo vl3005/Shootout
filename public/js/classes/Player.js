@@ -1,13 +1,16 @@
 class Player {
-  constructor({ x, y, radius, color, bAngle, username, isDead, ip, rand, isRespawning = false ,text = username, socket }) {
+  constructor({ x, y, radius, craft, color, bAngle, username, onMap, isDead, ip, rand, isRespawning = false ,text = username, socket }) {
     this.x = x
     this.y = y
     this.socket = socket
+    this.craft = craft
     this.radius = radius
-    this.color = color
+    //this.color = color
+    this.onMap =onMap
     this.username = username
     this.text = text
     this.isDead = isDead
+    this.isReloading = false
     this.isRespawning = isRespawning
     this.opacity = 1
     this.ip = ip
@@ -22,16 +25,17 @@ class Player {
     this.replenishBuffer = null;
     this.shieldReplenish = null;    
     this.energyReplenish = null;
-    this.thrusterOutput = 0;
+    this.thrusterOutput = 0;    
+    this.thruster = trSprite.clone()    
     this.noiseSpeed = 0.005;
     this.reloadInt = null;
     this.energyDepleted = false    
-    this.cannonRadius = 4
+    this.cannonRadius = 4    
     this.cannonX = this.x + (this.radius + 5.5) * this.angleCos
     this.cannonY = this.y + (this.radius + 5.5) * this.angleSin
     this.points = [];
     this.numPoints = 10;
-    this.baseRadius = this.radius * 3;
+    this.baseRadius = this.radius * 2.7;
     this.bAngle = bAngle
     this.gradX1 = this.x - (this.radius + 10.5) * Math.cos(this.bAngle)
     this.gradY1 = this.y - (this.radius + 10.5) * Math.sin(this.bAngle)
@@ -39,6 +43,8 @@ class Player {
     this.gradY2 = this.y + (this.radius + 10.5) * Math.sin(this.bAngle)
     this.gradR1 = 20
     this.gradR2 = 20
+
+    this.counter = 0;
     
     
 
@@ -61,9 +67,14 @@ class Player {
   drawShield() {
     if (!this.isDead && this.shield > 0) {
       c.save()
-      const noiseFactor = 2 + (100 - this.shield) / 300;
-      if (this.shieldReplenish == null) this.noiseSpeed = 0.003 + (100 - this.shield) / 5000;
-      else this.noiseSpeed = 0.03;
+      let noiseFactor = 2.2
+      if (this.shieldReplenish == null) {
+        this.noiseSpeed = 0.003 + (100 - this.shield) / 5000;
+        noiseFactor = 2.8 + (1 - this.shield / 100) / 300
+      }
+      else {
+        this.noiseSpeed = 0.03;
+      }
       const currentShieldRadius = this.baseRadius - 12 * (1 - this.shield / 100)
       let targetAngle;
       if (this.playerSpeed.x != 0 || this.playerSpeed.y != 0 || true) {
@@ -111,7 +122,7 @@ class Player {
       gradient.addColorStop(1, 'rgba(0, 30, 255, 0.7)'); // Fully opaque edge
       c.fillStyle = gradient
       c.fill();
-      c.strokeStyle = this.color
+      c.strokeStyle = this.craft.mColor
       c.lineWidth = 1.5
       c.lineCap = "round";
       c.lineJoin = "round";
@@ -124,22 +135,22 @@ class Player {
 
   reload(clickBuffer, shootCost) {
     this.cannonX = this.x
-    this.cannonY = this.y
+    this.cannonY = this.y    
     if (this.energy < shootCost) this.energyDepleted = true
+
     this.reloadInt = setInterval(() => {      
       if (this.cannonRadius < 4 && this.energy >= shootCost) {
+        this.isReloading = true
         if (this.energyDepleted) {
           sounds.gunRestored.play()
           this.energyDepleted = false
         }
         this.cannonRadius += 0.42
-        this.cannonX += this.angleCos/10
-        this.cannonY += this.angleSin/10
       }
       else if (this.cannonRadius >= 4) {
         this.cannonRadius = 4
         clearInterval(this.reloadInt)
-        
+        this.isReloading = false    
       }
       
       
@@ -150,27 +161,36 @@ class Player {
 
   drawCannon() {    
     if (!this.isDead) {
-      this.cannonX = this.x + (this.radius + 5.5) * this.angleCos
-      this.cannonY = this.y + (this.radius + 5.5) * this.angleSin
+      this.cannonX = this.x + (this.radius + 2.5) * this.angleCos
+      this.cannonY = this.y + (this.radius + 2.5) * this.angleSin
+      c.save()
+      const spinAngle = 4000*this.bAngle
+      c.shadowBlur = 4
+      c.shadowColor = this.craft.sColor
       c.globalAlpha = this.opacity
       c.beginPath()
       c.arc(this.cannonX, this.cannonY, this.cannonRadius, 0, Math.PI * 2, false)
-      c.fillStyle = this.color
+      c.strokeStyle = this.craft.sColor
+      c.lineWidth = 2
+      c.stroke()
+      c.arc(this.cannonX, this.cannonY, this.cannonRadius, 0, Math.PI * 2, false)
+      c.fillStyle = this.craft.mColor
       c.fill()
       c.beginPath()
-      this.gradient = c.createRadialGradient(this.x + (this.radius + 10.5) * Math.cos(this.bAngle),
-        this.y + (this.radius + 10.5) * Math.sin(this.bAngle), 11,
-        this.x + (this.radius + 10.5) * Math.cos(this.bAngle),
-        this.y + (this.radius + 10.5) * Math.sin(this.bAngle), 32)
-      this.gradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Shine effect at the start
-      this.gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)'); // Shine effect at the start
-      this.gradient.addColorStop(0.79, this.color);               // Your color in the middle
-      this.gradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.1)');                 // Slightly darker at the end
-      this.gradient.addColorStop(0.9, 'rgba(0, 0, 0, 0.2)');                 // Slightly darker at the end
-      this.gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');                 // Slightly darker at the end
-      c.fillStyle = this.gradient;
+      this.cannonGradient = c.createRadialGradient(this.cannonX + (2 * this.cannonRadius) * Math.cos(spinAngle),
+        this.cannonY + (2 * this.cannonRadius) * Math.sin(spinAngle), this.cannonRadius,
+        this.cannonX + (2.2 * this.cannonRadius) * Math.cos(spinAngle),
+        this.cannonY + (2.2 * this.cannonRadius) * Math.sin(spinAngle), 2.8*this.cannonRadius)
+      this.cannonGradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Shine effect at the start
+      this.cannonGradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)'); // Shine effect at the start
+      this.cannonGradient.addColorStop(0.8, this.craft.mColor);               // Your color in the middle
+      this.cannonGradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // Slightly darker at the end
+      this.cannonGradient.addColorStop(0.92, 'rgba(32, 33, 33, 0.2)');                 // Slightly darker at the end
+      this.cannonGradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');                 // Slightly darker at the end
+      c.fillStyle = this.cannonGradient;
       c.arc(this.cannonX, this.cannonY, this.cannonRadius, 0, Math.PI * 2, false)
       c.fill()     
+      c.restore()
     }   
   }
 
@@ -182,7 +202,7 @@ class Player {
       this.energyN = `E: ${(Math.min(200, Math.max(this.energy, 0)) / 200 * 100).toFixed(0)}%`
       c.font = '600 14px Stick No Bills'
       c.lineWidth = 2
-      c.fillStyle = this.color
+      c.fillStyle = this.craft.mColor
       c.textAlign = 'left'
 
       const energyTxtWidth = c.measureText(this.energyN).width;
@@ -193,7 +213,7 @@ class Player {
         statsX = this.x - (this.radius + 10)
         c.textAlign = 'right'
       } else statsX = this.x + this.radius + 10
-      c.strokeStyle = 'black'
+      c.strokeStyle = this.craft.sColor
       c.strokeText(this.shieldN, statsX, this.y - 2)
       c.strokeText(this.energyN, statsX, this.y + 11)
       c.fillText(this.energyN, statsX, this.y + 11)
@@ -207,43 +227,49 @@ class Player {
 
   replenishShield() {    
     if (this.shield < 100) {
-      this.shield += 0.05+0.05*(this.energy/200);      
+      this.shield += 0.05 + 0.05 * (this.energy / 200);      
+      this.counter++      
     }
     else {
       this.shield = 100
       clearInterval(this.shieldReplenish)
       this.shieldReplenish = null
+      this.counter = 0
     }    
   }
 
   drawEnergyWidget() {
-    c.save()    
+     
     if (!this.isDead) {
-      if (this.energy >= 1)  
+      if (this.energy >= 4)  
       {
+        c.save()   
         c.beginPath();
-        c.arc(this.x, this.y, this.radius + 2.5, Math.PI+angle + ((1 - this.energy / 200) * Math.PI), 3*Math.PI+angle - ((1 - this.energy / 200) * Math.PI));      
-        c.strokeStyle = this.color
-        c.lineWidth = 2.5
+        c.shadowColor = this.craft.sColor
+        c.shadowBlur = 3
+        c.arc(this.x, this.y, this.radius + 2.5, Math.PI + this.aimAngle + ((1 - this.energy / 200) * Math.PI)+0.05, 3 * Math.PI + this.aimAngle - ((1 - this.energy / 200) * Math.PI)-0.05);      
+        c.strokeStyle = this.craft.sColor
+        c.lineWidth = 2
         c.lineCap = "round";
         c.lineJoin = "round";
         c.stroke();
-        c.beginPath()
-        c.strokeStyle = this.gradient;
-        c.arc(this.x, this.y, this.radius + 2.5, Math.PI + angle + ((1 - this.energy / 200) * Math.PI), 3 * Math.PI + angle - ((1 - this.energy / 200) * Math.PI));
-        c.stroke()
+        c.restore()
       }     
     } 
-    c.restore()
+    
   }
+
+  
 
   replenishEnergy() {
     if (this.energy < 200) {
-      this.energy += 1 + Math.round((1 - this.energy / 200) * 100) /100
+      this.energy += 0.75 + 0.75 * Math.round((1 - this.energy / 200) * 100) / 100
+      
     } else {
       this.energy = 200
       clearInterval(this.energyReplenish)
       this.energyReplenish = null
+      
     }
   }
 
@@ -251,39 +277,43 @@ class Player {
     let textX = this.x
     let textY = this.y - this.radius*2
     c.save()
-    c.lineCap = "round";
-    c.lineJoin = "round";
-    c.fillStyle = 'white'
-    c.strokeStyle = 'black'
-    c.textAlign = 'center'
-    c.lineWidth = 3;        
+        
     const textWidth = c.measureText(this.text).width;
     const textMetrics = c.measureText(this.text);
     const actualHeight = textMetrics.actualBoundingBoxAscent + textMetrics.actualBoundingBoxDescent;
+    c.textAlign = 'center'
     if (this.isDead) {
+      c.strokeStyle = this.craft.aColor
       c.textBaseline = 'middle'
       c.font = '36px Stick No Bills'
-      c.fillStyle = this.color
+      c.fillStyle = this.craft.mColor
       textY = this.y
     }
     else {
+      c.fillStyle = 'white'   
+      c.strokeStyle = 'black'
       this.text = this.username
-      c.font = '12px Zen Dots'
+      c.font = '12px Zen Dots'      
+      c.textBaseline = 'bottom';    
     }
-
+    c.lineCap = "round";
+    c.lineJoin = "round";
+    
+    c.lineWidth = 3
     if (this.x <= textWidth) {
       textX = textWidth * 2
     }
       else if (this.x + this.radius >= canvas.width - textWidth) {
         textX = canvas.width - textWidth * 2
       }
-    if (this.y - 2*this.radius <= actualHeight) {
-      textY = this.y + actualHeight + this.radius
+    if (this.y - 2*this.radius <= 2*actualHeight) {
+      textY = this.y + 1.5*actualHeight + this.radius
       c.textBaseline = 'top'
     }
       else if (this.y >= canvas.height - actualHeight) {
         textY = canvas.height - actualHeight
-        c.textBaseline = 'bottom'
+      c.textBaseline = 'bottom'
+        console.log(c.textBaseline)
       }
 
     c.strokeText(this.text, textX, textY)
@@ -293,9 +323,16 @@ class Player {
 
   draw() {
     if (!this.isDead) {
+      if (this.thrusterOutput > 0) {
+        this.thruster.x = this.x //- 1.6 * this.thrusterOutput//- this.thruster.OffsetX + this.thruster.drawnWidth
+        this.thruster.y = this.y + this.thruster.drawnHeight - 20 - 2.5 * this.thrusterOutput //+ this.thruster.OffsetY// + this.thruster.drawnHeight
+        this.thruster.angle = this.moveAngle - Math.PI / 2
+        this.thruster.drawnHeight = 20 + 2.5 * this.thrusterOutput
+        this.thruster.draw()
+      } 
       c.globalAlpha = this.opacity
       c.beginPath()
-      c.fillStyle = this.color
+      c.fillStyle = this.craft.mColor
       c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false)
       c.fill()  
       c.beginPath()        
