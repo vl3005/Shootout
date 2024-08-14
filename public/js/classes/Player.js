@@ -26,7 +26,8 @@ class Player {
     this.shieldReplenish = null;    
     this.energyReplenish = null;
     this.thrusterOutput = 0;    
-    this.thruster = trSprite.clone()    
+    this.thruster = trlSprites[craft.trlType].clone()    
+    this.thruster.normY = 0
     this.noiseSpeed = 0.005;
     this.reloadInt = null;
     this.energyDepleted = false    
@@ -116,10 +117,10 @@ class Player {
       c.globalAlpha = 0.5
       c.shadowBlur = 40 * (this.shield/100)
       c.shadowColor = `rgba(0, 30, 255, 1)`
-      const gradient = c.createRadialGradient(this.x, this.y,15, this.x, this.y, currentShieldRadius);
+      const gradient = c.createRadialGradient(this.x, this.y,12, this.x, this.y, currentShieldRadius);
       
       gradient.addColorStop(0, 'rgba(0, 30, 255, 0)'); // Fully transparent center
-      gradient.addColorStop(1, 'rgba(0, 30, 255, 0.7)'); // Fully opaque edge
+      gradient.addColorStop(1, 'hsla(205, 100%, 50%, 0.8)'); // Fully opaque edge
       c.fillStyle = gradient
       c.fill();
       c.strokeStyle = this.craft.mColor
@@ -200,9 +201,11 @@ class Player {
       let statsX = this.x + this.radius + 10;
       this.shieldN = `S: ${Math.min(this.shield, 100).toFixed(0)}%`
       this.energyN = `E: ${(Math.min(200, Math.max(this.energy, 0)) / 200 * 100).toFixed(0)}%`
-      c.font = '600 14px Stick No Bills'
-      c.lineWidth = 2
-      c.fillStyle = this.craft.mColor
+      c.shadowBlur = 3
+      c.shadowColor = this.craft.sColor
+      c.font = '800 18px Stick No Bills'
+      c.lineWidth = 3
+      c.fillStyle = this.craft.sColor
       c.textAlign = 'left'
 
       const energyTxtWidth = c.measureText(this.energyN).width;
@@ -210,15 +213,20 @@ class Player {
 
       let textWidth = Math.max(energyTxtWidth, shieldTxtWidth)
       if (statsX >= canvas.width - textWidth) {
-        statsX = this.x - (this.radius + 10)
+        statsX = this.x - (this.radius + 11)
         c.textAlign = 'right'
-      } else statsX = this.x + this.radius + 10
-      c.strokeStyle = this.craft.sColor
-      c.strokeText(this.shieldN, statsX, this.y - 2)
-      c.strokeText(this.energyN, statsX, this.y + 11)
-      c.fillText(this.energyN, statsX, this.y + 11)
+      } else statsX = this.x + this.radius + 11
+      c.strokeStyle = 'black'//this.craft.aColor
+      
+      c.strokeText(this.energyN, statsX, this.y + 12)
+      c.fillText(this.energyN, statsX, this.y + 12)
+      c.shadowColor = 'hsla(205, 100%, 50%, 1)'      
+      c.fillStyle = 'hsla(205, 100%, 50%, 1)'      
+      c.strokeStyle = 'black'
+      c.strokeText(this.shieldN, statsX, this.y - 4)
+      c.fillText(this.shieldN, statsX, this.y - 4)
 
-      c.fillText(this.shieldN, statsX, this.y - 2)
+      
 
       c.restore()
     }
@@ -324,10 +332,10 @@ class Player {
   draw() {
     if (!this.isDead) {
       if (this.thrusterOutput > 0) {
-        this.thruster.x = this.x //- 1.6 * this.thrusterOutput//- this.thruster.OffsetX + this.thruster.drawnWidth
-        this.thruster.y = this.y + this.thruster.drawnHeight - 20 - 2.5 * this.thrusterOutput //+ this.thruster.OffsetY// + this.thruster.drawnHeight
-        this.thruster.angle = this.moveAngle - Math.PI / 2
-        this.thruster.drawnHeight = 20 + 2.5 * this.thrusterOutput
+        this.thruster.x = this.x      
+        this.thruster.angle = this.moveAngle + Math.PI / 2 
+        this.thruster.drawnHeight = 10 + 5 * this.thrusterOutput
+        this.thruster.y = this.y
         this.thruster.draw()
       } 
       c.globalAlpha = this.opacity

@@ -11,7 +11,7 @@ class Projectile {
     this.speed = speed
     this.angle = angle
     this.bAngle = 0;
-    this.trail = new Sprite(trail, 0, 0, 60,0, true, 517, 353, 7, 9, 29, 50)
+    //this.trail = new Sprite(trail, 0, 0, 60,0, true, 517, 353, 7, 9, 29, 50)
     this.hasRicocheted = false
     this.distanceTraveled = 0;    
     this.maxDistance = window.canvasDiag-40;
@@ -132,8 +132,8 @@ class Projectile {
         SOCKET.emit('spentProjectile', { id })
       }
     }
-    this.trail.x = this.x
-    this.trail.y = this.y
+    //this.trail.x = this.x
+    //this.trail.y = this.y
     //if (this.hasRicocheted) {      
     //  this.hasRicocheted = false
     //  this.angle = Math.atan2(this.velocity.y, this.velocity.x)

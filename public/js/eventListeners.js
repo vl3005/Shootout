@@ -9,9 +9,6 @@ let angle
 
 window.addEventListener('keydown', (event) => {
   if (!thisPlayer || thisPlayer.isDead) return
-  //if (event.code == 'KeyW' || event.code == 'KeyA' ||
-  //  event.code == 'KeyS' || event.code == 'KeyD' &&
-  //if (!Object.values(keys).every(key => key.pressed === false) &&    
   switch (event.code) {
     case 'KeyM':
       event.preventDefault()
@@ -28,7 +25,6 @@ window.addEventListener('keydown', (event) => {
         if (KEYS.lastYKey !== 'w') {
           KEYS.lastYKey = 'w'
           KEYS.s.pressed = false
-          //if (PLAYERSPEED.y > 0) SOCKET.emit('keyup', { key: 'KeyS', PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
         } 
         break
       case 'KeyA':
@@ -37,7 +33,6 @@ window.addEventListener('keydown', (event) => {
         if (KEYS.lastXKey !== 'a') {
           KEYS.lastXKey = 'a'
           KEYS.d.pressed = false
-         // if (PLAYERSPEED.x > 0) SOCKET.emit('keyup', { key: 'KeyD', PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
         }    
         break
       case 'KeyS':
@@ -46,7 +41,6 @@ window.addEventListener('keydown', (event) => {
         if (KEYS.lastYKey !== 's') {
           KEYS.lastYKey = 's'
           KEYS.w.pressed = false
-          //if (PLAYERSPEED.y > 0) SOCKET.emit('keyup', { key: 'KeyW', PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
         }    
         break
       case 'KeyD':
@@ -55,7 +49,6 @@ window.addEventListener('keydown', (event) => {
         if (KEYS.lastXKey !== 'd') {
           KEYS.lastXKey = 'd'
           KEYS.a.pressed = false
-          //if (PLAYERSPEED.x > 0) SOCKET.emit('keyup', { key: 'KeyA', PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
         }    
         break
       default:
@@ -65,11 +58,13 @@ window.addEventListener('keydown', (event) => {
     clearInterval(thisPlayer.energyReplenish)
     thisPlayer.energyReplenish = null
     
-    if (!sounds.move.playing(MOVESOUND[SOCKET.id])) {
-      MOVESOUND[SOCKET.id] = sounds.move.play()      
+    if (!sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
+      console.log('here just once')
+      MOVESOUND[thisPlayer.socket.id] = sounds.move.volume(0).play('main')
+      setTimeout(() => {
+        sounds.move.fade(0, 0.25, 250, MOVESOUND[thisPlayer.socket.id]);
+      }, 10);
     }
-    if (sounds.move.volume(MOVESOUND[SOCKET.id]) <0.4)
-      sounds.move.fade(0.02, 0.4, 500, MOVESOUND[SOCKET.id])
 }
 })
 
@@ -85,38 +80,39 @@ window.addEventListener('keyup', (event) => {
     case 'KeyW':
       KEYS.w.pressed = false
       keyHeld = false
-      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
+      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, KEYS})
       break
     case 'KeyA':
       KEYS.a.pressed = false
       keyHeld = false
-      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
+      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, KEYS})
       break
     case 'KeyS':
       KEYS.s.pressed = false
       keyHeld = false
-      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
+      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, KEYS})
       break
     case 'KeyD':
       KEYS.d.pressed = false 
       keyHeld = false
-      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, FElastXKey: KEYS.lastXKey, FElastYKey: KEYS.lastYKey })
+      SOCKET.emit('keyup', { key: event.code, PLAYERSPEED, KEYS})
       break
     default:
       return
   }
  
-
   if (KEYS.w.pressed == false &&
     KEYS.a.pressed == false &&
     KEYS.s.pressed == false &&
     KEYS.d.pressed == false) {
-    console.log()
     if (!thisPlayer.energy > 0)  // If player's energy drops below zero from movement spending, bring it back to 0
       thisPlayer.energy = 0
 
-    if (sounds.move.playing(MOVESOUND[SOCKET.id])) {
-      sounds.move.fade(0.4, 0.02, 300, MOVESOUND[SOCKET.id])
+    if (sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
+      sounds.move.fade(0.25, 0.0, 250, MOVESOUND[thisPlayer.socket.id])
+        .once('fade', () => {
+          sounds.move.stop(MOVESOUND[thisPlayer.socket.id]);
+        });
 
     }
     thisPlayer.moveAngle += Math.PI
@@ -125,6 +121,7 @@ window.addEventListener('keyup', (event) => {
       energyRepBuffer = setTimeout(() => { 
       thisPlayer.energyReplenish = setInterval(() => {
         thisPlayer.replenishEnergy()
+        thisPlayer.socket.emit('updateEnergy', (FENDPLAYERS[SOCKET.id].energy))
       }, 75)        
         energyRepBuffer = null
       },900)
@@ -139,27 +136,14 @@ document.addEventListener('blur', () => {
   KEYS.a.pressed = false
   KEYS.s.pressed = false
   KEYS.d.pressed = false
-  console.log("yeah")
   animationPaused = true;
 })
 
-
-//const startMoving = () => {
-//  moveCrosshair = true;
-//  clearTimeout(moveTimeout); // Clear any existing timeout
-//}
-
-//const stopMoving = () => {
-//  if (moveCrosshair) {
-//    moveCrosshair = false;
-//  }
-//}
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function emitShoot() {
-  //const { top, left } = canvas.getBoundingClientRect()
   if (thisPlayer.energy < ENERGYCOSTS.shoot)
     sounds.lowEnergy.play()
   while (holdFireButton && thisPlayer.energy >= ENERGYCOSTS.shoot && !thisPlayer.isDead) {
@@ -171,20 +155,16 @@ async function emitShoot() {
       thisPlayer.energyReplenish = null
       clearTimeout(energyRepBuffer)
       thisPlayer.energy -= ENERGYCOSTS.shoot
+      thisPlayer.socket.emit('updateEnergy', (FENDPLAYERS[SOCKET.id].energy))
     }
     thisPlayer.reload(RELOADTIME, ENERGYCOSTS.shoot)
-    //if (!moveCrosshair) {playerPosition = {
-    //  x: thisPlayer.x,
-    //  y: thisPlayer.y
-    //}
-    //calcAimData()  
-    //}
     if (thisPlayer.energy < ENERGYCOSTS.shoot)
       sounds.gunDead.play()
     energyRepBuffer = setTimeout(() => {
       if (!thisPlayer.isDead && !thisPlayer.energyReplenish)
         thisPlayer.energyReplenish = setInterval(() => {
           thisPlayer.replenishEnergy()
+          thisPlayer.socket.emit('updateEnergy', (FENDPLAYERS[SOCKET.id].energy))
         }, 75)
       energyRepBuffer = null
     }, 1900)
@@ -207,15 +187,10 @@ canvas.addEventListener('mousemove', (event) => {
     MOUSEPOSITION.x = event.clientX
     MOUSEPOSITION.y = event.clientY
   }
-
-
 })
 
-//canvas.addEventListener('mouseleave', stopMoving);
-//canvas.addEventListener('mouseout', stopMoving);
-
 window.addEventListener('beforeunload', () => {
-  SOCKET.emit('disconnecting')
+  thisPlayer.socket.emit('disconnecting')
 })
 
 canvas.addEventListener('mousedown', (event) => {
@@ -228,9 +203,6 @@ canvas.addEventListener('mousedown', (event) => {
             setTimeout(() => { justClicked = false }, RELOADTIME)
             holdFireButton = true
             justClicked = true
-            //MOUSEPOSITION.x = event.clientX
-            //MOUSEPOSITION.y = event.clientY
-            //calcAimData(event)
             emitShoot()
           }
         }
@@ -239,7 +211,6 @@ canvas.addEventListener('mousedown', (event) => {
 })
 
 addEventListener('mouseup', () => {
-  //stopMoving()
   holdFireButton = false
 })
 

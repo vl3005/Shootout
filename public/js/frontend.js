@@ -296,7 +296,8 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
       if (backEndProjectile.isDead) {        
         actSprID = check2Big(actSprID)
         sprToPush = smlHitSprite.clone()
-        sprToPush.resetSprite(spriteX, spriteY, rand1*2*Math.PI)
+        sprToPush.resetSprite(spriteX, spriteY, rand1 * 2 * Math.PI)
+        sprToPush.image = hitImages[backEndProjectile.craft.hitType]
         ACTIVE_SPRITES[actSprID] = sprToPush        
         delete FENDPROJECTILES[id]
         }
@@ -344,7 +345,6 @@ SOCKET.on('updateSpeed', ({newSpeed, id}) => {
     PLAYERSPEED = newSpeed
   }
   else {
-    console.log(`HERE ${newSpeed}`)
     FENDPLAYERS[id].thrusterOutput = Math.hypot(newSpeed.x, newSpeed.y)
   }
   
@@ -434,7 +434,7 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
           FENDPLAYERS[id].cannonRadius = backEndPlayer.cannonRadius
           FENDPLAYERS[id].angleCos = backEndPlayer.angleCos
           FENDPLAYERS[id].angleSin = backEndPlayer.angleSin
-          //FENDPLAYERS[id].thrusterOutput = backEndPlayer.thrusterOutput
+          FENDPLAYERS[id].energy = backEndPlayer.energy
           FENDPLAYERS[id].aimAngle = backEndPlayer.aimAngle
           FENDPLAYERS[id].moveAngle = backEndPlayer.moveAngle
           FENDPLAYERS[id].x = backEndPlayer.x
@@ -568,7 +568,6 @@ SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
 SOCKET.on('playerDies', ({ dyingPlayerId, rand1 }) => {
 
   if (FENDPLAYERS[dyingPlayerId]) {
-    console.log(rand1)
     actSprID = check2Big(actSprID)
     sprToPush = explSprite.clone()
     sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y,rand1*2*Math.PI)
@@ -600,7 +599,8 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1 }) => {
       sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y)
       ACTIVE_SPRITES[actSprID] = sprToPush
       sounds.vortex.play()
-      if (dyingPlayerId === SOCKET.id){
+      if (dyingPlayerId === SOCKET.id) {
+      FENDPLAYERS[dyingPlayerId].shield = 30
       FENDPLAYERS[dyingPlayerId].shieldReplenish = setInterval(() => {
         FENDPLAYERS[dyingPlayerId].replenishShield()
          SOCKET.emit('updateShield',
@@ -608,7 +608,7 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1 }) => {
       }, 1)
       FENDPLAYERS[dyingPlayerId].energyReplenish = setInterval(() => {        
         FENDPLAYERS[dyingPlayerId].replenishEnergy()
-      }, 5)}
+      }, 10)}
       gsap.to(FENDPLAYERS[dyingPlayerId], {
         duration: 0.202,  // Duration of each fade in/out
         opacity: 0,     // Target opacity for fade out
@@ -653,9 +653,11 @@ function animate() {
   
   c.clearRect(0, 0, canvas.width, canvas.height)
   calcAimData()
-  for (const id in FENDPROJECTILES) {
-    FENDPROJECTILES[id].bAngle = bAngle + Math.PI
-    FENDPROJECTILES[id].update()
+  if (Object.keys(FENDPROJECTILES).length !== 0) {  
+    for (const id in FENDPROJECTILES) {
+      FENDPROJECTILES[id].bAngle = bAngle + Math.PI;
+      FENDPROJECTILES[id].update();
+    }
   }
   for (const id in FENDPLAYERS) {
     const frontEndPlayer = FENDPLAYERS[id]
@@ -678,9 +680,9 @@ function animate() {
       FENDPLAYERS[id].gradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // Slightly darker at the end
       FENDPLAYERS[id].gradient.addColorStop(0.92, 'rgba(32, 33, 33, 0.2)');                 // Slightly darker at the end
       FENDPLAYERS[id].gradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');                 // Slightly darker at the end      
-      if (id === SOCKET.id) {
+      //if (id === SOCKET.id) {
         frontEndPlayer.drawEnergyWidget()
-      }            
+     // }            
       frontEndPlayer.draw()
       frontEndPlayer.drawCannon()            
       frontEndPlayer.drawShield()      
@@ -739,7 +741,11 @@ setInterval(() => {
     if (!FENDPLAYERS[SOCKET.id].isDead) {
       if (Object.values(KEYS).some(key => key.pressed === true)) {
         let dynTopSpeed = Number((TOPSPEED / Math.sqrt(2)).toFixed(2))
-        if (Object.values(KEYS).filter(key => key.pressed === true).length === 1) dynTopSpeed = TOPSPEED
+        let energyPenalty = Number(((TOPSPEED * 0.28 * (1 - FENDPLAYERS[SOCKET.id].energy / 200)) / Math.sqrt(2)).toFixed(2))
+        if (Object.values(KEYS).filter(key => key.pressed === true).length === 1) {
+          dynTopSpeed = TOPSPEED
+          energyPenalty = Number((TOPSPEED * 0.28 * (1 - FENDPLAYERS[SOCKET.id].energy / 200)).toFixed(2))
+        }
         else if (Object.values(KEYS).filter(key => key.pressed === true).length > 2) {
           for (const key in KEYS) key.pressed = false
         }
@@ -748,6 +754,7 @@ setInterval(() => {
           FENDPLAYERS[SOCKET.id].energy -= ENERGYCOSTS.move
 
         } else FENDPLAYERS[SOCKET.id].energy = 0
+        SOCKET.emit('updateEnergy', (FENDPLAYERS[SOCKET.id].energy))
         // Stuck left
         if (FENDPLAYERS[SOCKET.id].x - FENDPLAYERS[SOCKET.id].radius <= 0) {
           FENDPLAYERS[SOCKET.id].x = FENDPLAYERS[SOCKET.id].radius + 1; stuck = true
@@ -777,8 +784,7 @@ setInterval(() => {
           }
         }
 
-        if (!stuck) {
-          let energyPenalty = (TOPSPEED * 0.4 * (1 - FENDPLAYERS[SOCKET.id].energy / 200))
+        if (!stuck) {          
           //     Going up W
           if (KEYS.w.pressed && KEYS.lastYKey == 'w'/* && !KEYS.a.pressed && !KEYS.d.pressed*/) {
 

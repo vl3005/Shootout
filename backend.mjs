@@ -22,19 +22,19 @@ app.get('/', (req, res) => {
 })
 
 const crafts = [
-  { name: 'Void Raptor',      mColor: '#000000', /* Black */        sColor: '#f54242', aColor: '#000000', inUse: false },
-  { name: 'Strato-Seeker',    mColor: '#6f7dfc', /* Sky blue */     sColor: '#42f55a', aColor: '#000000', inUse: false },
-  { name: 'Solar Falcon',     mColor: '#ffd700', /* Gold Yellow */  sColor: '#7dabf5', aColor: '#000000', inUse: false },
-  { name: 'Crimson Comet',    mColor: '#ff0d15', /* Red */          sColor: '#ffd700', aColor: '#000000', inUse: false },
-  { name: 'Emerald Vortex',   mColor: '#18fc03', /* Green */        sColor: '#ffffff', aColor: '#000000', inUse: false },
-  { name: 'Nebula Blossom',   mColor: '#ff84d4', /* Baby Pink */    sColor: '#7dabf5', aColor: '#000000', inUse: false },
-  { name: 'Stellar Rose',     mColor: '#ff84d4', /* Pink */         sColor: '#18fc03', aColor: '#000000', inUse: false },
-  { name: 'Aqua Spirit',      mColor: '#00ffd7', /* Light Teal */   sColor: '#f5f542', aColor: '#000000', inUse: false },
-  { name: 'Cosmic Mirage',    mColor: '#d300e1', /* Purple */       sColor: '#ffffff', aColor: '#000000', inUse: false },
-  { name: 'Nova Flare',       mColor: '#ff9e00', /* Orange */       sColor: '#dd28ed', aColor: '#000000', inUse: false },
-  { name: 'Lunar Phantom',    mColor: '#969696', /* Silver */       sColor: '#820004', aColor: '#000000', inUse: false },
-  { name: 'Arid Voyager',     mColor: '#947944', /* Tan */          sColor: '#f20515', aColor: '#000000', inUse: false },
-  { name: 'Galactic Spectre', mColor: '#000000', /* White */        sColor: '#05f205', aColor: '#000000', inUse: false },
+  { name: 'Void Raptor',      mColor: '#000000', /* Black */        sColor: '#f54242', aColor: '#FFFFFF', inUse: false, trlType: 1, hitType: 2 },
+  { name: 'Strato-Seeker',    mColor: '#6f7dfc', /* Sky blue */     sColor: '#f54242', aColor: '#000000', inUse: false, trlType: 2, hitType: 2 },
+  { name: 'Solar Falcon',     mColor: '#ffd700', /* Gold Yellow */  sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 0, hitType: 0 },
+  { name: 'Crimson Comet',    mColor: '#ff0d15', /* Red */          sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 2, hitType: 1 },
+  { name: 'Emerald Vortex',   mColor: '#18fc03', /* Green */        sColor: '#f5f542', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
+  { name: 'Nebula Blossom',   mColor: '#fc79d1', /* Baby Pink */    sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 2, hitType: 1 },
+  { name: 'Stellar Rose',     mColor: '#f707a3', /* Pink */         sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 0, hitType: 0 },
+  { name: 'Aqua Spirit',      mColor: '#00ffd7', /* Light Teal */   sColor: '#f5f542', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
+  { name: 'Cosmic Mirage',    mColor: '#880a91', /* Purple */       sColor: '#ffffff', aColor: '#000000', inUse: false, trlType: 2, hitType: 4 },
+  { name: 'Nova Flare',       mColor: '#ff9e00', /* Orange */       sColor: '#ffffff', aColor: '#000000', inUse: false, trlType: 0, hitType: 4 },
+  { name: 'Lunar Phantom',    mColor: '#969696', /* Silver */       sColor: '#f54242', aColor: '#000000', inUse: false, trlType: 2, hitType: 2 },
+  { name: 'Arid Voyager',     mColor: '#947944', /* Tan */          sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 1, hitType: 0 },
+  { name: 'Galactic Spectre', mColor: '#ffffff', /* White */        sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 0, hitType: 1 },
 ]
 
 const backEndPlayers = {}
@@ -85,7 +85,8 @@ io.on('connection', (SOCKET) => {
 
     try {
       crafts[backEndPlayers[SOCKET.id].chosenCraftIndex].inUse = false
-      console.log(`${formatDate(new Date(Date.now()))} - Got the craft back ${backEndPlayers[SOCKET.id].craft.name}`);
+      
+      console.log(`${formatDate(new Date(Date.now()))} - Got the craft back ${backEndPlayers[SOCKET.id].craft.name} ${crafts}`);
     } catch (error) {
       console.error(`${formatDate(new Date(Date.now())) } - Error in disconnect handler: ${error}`);
     }
@@ -124,11 +125,14 @@ io.on('connection', (SOCKET) => {
     if (backEndPlayers[SOCKET.id])
     backEndPlayers[SOCKET.id].onMap = true
   }) 
+  SOCKET.on('updateEnergy', (energy) => {
+    backEndPlayers[SOCKET.id].energy = energy
+  })
+
   SOCKET.on('updateShield', ({ shield, playerId, isReplenishing }) => {
     if (backEndPlayers[playerId]) {
       backEndPlayers[playerId].shield = shield
       backEndPlayers[playerId].isReplenishing = isReplenishing
-      console.log('shield updated', backEndPlayers[playerId].isReplenishing, isReplenishing)
 
       SOCKET.broadcast.emit('updateShieldInt', { shield, playerId, isReplenishing });
     }
@@ -153,6 +157,7 @@ io.on('connection', (SOCKET) => {
       y,
       craft: crafts[chosenCraftIndex],
       chosenCraftIndex,
+      energy:200,
       sequenceNumber: 0,
       score: 0,
       username,
@@ -187,7 +192,7 @@ io.on('connection', (SOCKET) => {
   SOCKET.on('updateCannonPosition', ({ angleCos, angleSin, angle}) => {
     backEndPlayers[SOCKET.id].angleCos = angleCos
     backEndPlayers[SOCKET.id].angleSin = angleSin
-    backEndPlayers[SOCKET.id].angle = angle
+    backEndPlayers[SOCKET.id].aimAngle = angle
   })
   SOCKET.on('updateCannonRadius', (cannonRadius) => {
     if (!backEndPlayers[SOCKET.id] ||backEndPlayers[SOCKET.id].isDead) {
@@ -300,7 +305,7 @@ io.on('connection', (SOCKET) => {
   }
   
 
-  SOCKET.on('keyup', ({ key, PLAYERSPEED, FElastXKey, FElastYKey}) => {
+  SOCKET.on('keyup', ({ key, KEYS, PLAYERSPEED }) => {
     let id = SOCKET.id
     if (backEndPlayers[id].isDead || !backEndPlayers[id]) return
     backEndPlayers[id].playerSpeed = PLAYERSPEED
@@ -308,12 +313,18 @@ io.on('connection', (SOCKET) => {
     let changedY = false
     let tempXSpeed;
     let tempYSpeed;
-    backEndPlayers[id].moveAngle += Math.PI
-    backEndPlayers[id].moveAngle %= 2 * Math.PI
+    if (KEYS.w.pressed == false &&
+      KEYS.a.pressed == false &&
+      KEYS.s.pressed == false &&
+      KEYS.d.pressed == false)
+    {
+      backEndPlayers[id].moveAngle += Math.PI
+      backEndPlayers[id].moveAngle %= 2 * Math.PI
+    }
     let factorX = 1
     let factorY = 1
-    backEndPlayers[id].lastXKey = FElastXKey
-    backEndPlayers[id].lastYKey = FElastYKey
+    backEndPlayers[id].lastXKey = KEYS.lastXKey
+    backEndPlayers[id].lastYKey = KEYS.lastYKey
     switch (key) {
       case 'KeyW':
         clearInterval(activeDecInts[id].y)
@@ -326,10 +337,7 @@ io.on('connection', (SOCKET) => {
             activeDecInts[id].y = null
             return
           }
-          backEndPlayers[id].playerSpeed.y += dV
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
+          backEndPlayers[id].playerSpeed.y += dV          
           if (!changedY && backEndPlayers[id].y - backEndPlayers[id].radius <= 0) {
             changedY = true
             factorY = -1
@@ -345,7 +353,10 @@ io.on('connection', (SOCKET) => {
             SOCKET.emit('decelerating', ({ DecelY: false}))
             backEndPlayers[id].playerSpeed.y = 0
           } else { }
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
           tempYSpeed = backEndPlayers[id].playerSpeed.y 
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
         }, 15)
           break
       case 'KeyA':
@@ -360,9 +371,6 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.x += dV
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedX && backEndPlayers[id].x - backEndPlayers[id].radius < 0) {
             changedX = true
             factorX = -1
@@ -378,7 +386,10 @@ io.on('connection', (SOCKET) => {
               SOCKET.emit('decelerating', ({DecelX: false}))
               backEndPlayers[id].playerSpeed.x = 0
             } else { }          
-          tempXSpeed = backEndPlayers[id].playerSpeed.x 
+          tempXSpeed = backEndPlayers[id].playerSpeed.x
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
         }, 15)      
           break
       case 'KeyS':
@@ -393,9 +404,6 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.y -= dV
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedY && backEndPlayers[id].y + backEndPlayers[id].radius >= canvas.height) {
             changedY = true
             factorY = -1
@@ -412,7 +420,9 @@ io.on('connection', (SOCKET) => {
             backEndPlayers[id].playerSpeed.y = 0
           } else { }
           tempYSpeed = backEndPlayers[id].playerSpeed.y
-          
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)          
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
         }, 15)
           break
       case 'KeyD':
@@ -427,9 +437,6 @@ io.on('connection', (SOCKET) => {
             return
           }
           backEndPlayers[id].playerSpeed.x -= dV
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
           if (!changedX && backEndPlayers[id].x + backEndPlayers[id].radius >= canvas.width) {
             changedX = true
             factorX = -1
@@ -446,7 +453,9 @@ io.on('connection', (SOCKET) => {
             backEndPlayers[id].playerSpeed.x = 0
           } else { }
           tempXSpeed = backEndPlayers[id].playerSpeed.x
-          
+          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
         }, 15)   
         break
       }
@@ -556,7 +565,6 @@ setInterval(() => {
           } else {
             backEndProjectiles[id].hasRicocheted = true
             backEndProjectiles[id].ricochetPens++
-            //console.log('rico', backEndProjectiles[id].hasRicocheted, backEndProjectiles[id].ricochetPens)
             switch (COLLISION.side) {
               case 'left':
                 if (backEndProjectiles[id].velocity.x < 0)
@@ -604,11 +612,12 @@ setInterval(() => {
               backEndPlayers[playerId].isDead = true
               backEndPlayers[playerId].isRespawning = true
               countRespawn(playerId)
+              console.log(`${formatDate(new Date(Date.now())) } - ${backEndPlayers[playerId].username} has died! Respawning soon...` )
               io.emit('playerDies', {dyingPlayerId: playerId, rand1: Math.random()})
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return
                 backEndPlayers[playerId].isDead = false
-                console.log(backEndPlayers[playerId], ' is alive again')
+                console.log(`${formatDate(new Date(Date.now()))} - ${backEndPlayers[playerId].username} is alive again!`)
               }, backEndRespawnTime * 1000)
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return

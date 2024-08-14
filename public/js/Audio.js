@@ -85,14 +85,12 @@ window.sounds = {
     }
   }),
   move: new Howl({
-    src: ['../audio/ridev5.wav'],
-    volume: 0.4,
+    src: ['../audio/ridev6.wav'],
+    volume: 0.3,
+    sprite: {main:[478,1618]},
     loop: true,
     html5: true,
     html5PoolSize: 10,
-    preload: 'true',
-    onstop: function(){
-      this.volume(0.4)
-    }
+    preload: 'true'
   })
 }

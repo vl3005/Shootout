@@ -1,5 +1,5 @@
 class Sprite {
-  constructor({image, x, y, frameCount, startFrame=0, looped = false, rotate = false, colorize = 0, OffsetX=0,OffsetY=0, width, height, rows = 1, cols = 1, drawnWidth, drawnHeight}) {
+  constructor({image, x, y, frameCount, normX = 1, normY = 1, startFrame=0, looped = false, rotate = false, colorize = 0, OffsetX=0,OffsetY=0, width, height, rows = 1, cols = 1, drawnWidth, drawnHeight}) {
     this.image = image
     this.frameCount = frameCount;
     this.width = width;
@@ -9,6 +9,8 @@ class Sprite {
     this.OffsetY = OffsetY
     this.looped = looped
     this.height = height;
+    this.normX = normX
+    this.normY = normY
     this.startFrame = startFrame
     this.drawnHeight = drawnHeight
     this.drawnWidth = drawnWidth
@@ -31,12 +33,12 @@ class Sprite {
     c.save()    
     if (this.rotate) {
       c.translate(this.x, this.y);
-      c.rotate(this.angle)    
+      c.rotate(this.angle)      
       c.drawImage(
         this.image,
         frameX, frameY,
         this.width, this.height,
-        this.OffsetX -this.drawnWidth / 2, this.OffsetY - this.drawnHeight / 2,
+        this.OffsetX - this.drawnWidth / 2 * this.normX, this.OffsetY - this.drawnHeight / 2 * this.normY,
         this.drawnWidth, this.drawnHeight
       );
       if (this.colorize) {
@@ -98,10 +100,22 @@ explosion.src = '../../img/Effect_Explosion2_1_355x365.png'
 explosion.onload = function () { console.log('Explosion loaded') }
 const explSprite = new Sprite({image: explosion, x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 120,drawnHeight: 124})
 
-const smallHit = new Image()
-smallHit.src = '../../img/Effect_SmallHit_1_516x463.png'
-smallHit.onload = function () { console.log('smallHit loaded') }
-const smlHitSprite = new Sprite({ image: smallHit, x: 0, y: 0, frameCount: 29, startFrame: 2, looped: false, rotate: true, OffsetX: 13, width: 516, height: 463, rows: 7, cols: 9, drawnWidth: 89, drawnHeight: 80})
+const smallHitBlue = new Image()
+smallHitBlue.src = '../../img/Effect_SmallHit_1_516x463_blue.png'
+smallHitBlue.onload = function () { console.log('smallHit_blue loaded') }
+const smallHitGreen = new Image()
+smallHitGreen.src = '../../img/Effect_SmallHit_1_516x463_green.png'
+smallHitGreen.onload = function () { console.log('smallHit_blue loaded') }
+const smallHitYellow = new Image()
+smallHitYellow.src = '../../img/Effect_SmallHit_1_516x463_yellow.png'
+smallHitYellow.onload = function () { console.log('smallHit_yellow loaded') }
+const smallHitRed = new Image()
+smallHitRed.src = '../../img/Effect_SmallHit_1_516x463_red.png'
+smallHitRed.onload = function () { console.log('smallHit_red loaded') }
+const smallHitWhite = new Image()
+smallHitWhite.src = '../../img/Effect_SmallHit_1_516x463_white.png'
+smallHitWhite.onload = function () { console.log('smallHit_white loaded') }
+const smlHitSprite = new Sprite({ image: smallHitBlue, x: 0, y: 0, frameCount: 29, startFrame: 2, looped: false, rotate: true, OffsetX: 13, width: 516, height: 463, rows: 7, cols: 9, drawnWidth: 89, drawnHeight: 80})
 
 const impact = new Image()
 impact.src = '../../img/Effect_Impact_1_305x383.png'
@@ -114,11 +128,20 @@ vortex.onload = function () { console.log('vortex loaded') }
 const vrtxSprite = new Sprite({ image: vortex, x: 0, y: 0, frameCount: 48, startFrame: 2, looped: false, rotate: false, width: 429, height: 429, rows: 6, cols: 9, drawnWidth: 120, drawnHeight: 120 })
 
 
-const trail = new Image()
-trail.src = '../../img/Effect_PowerChords_1_517x353.png'
-trail.onload = function () { console.log('trail loaded') }
-const trSprite = new Sprite({ image: trail, x: 0, y: 0, frameCount: 60, startFrame: 0, looped: true, OffsetY:-17,rotate: true, width: 517, height: 353, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
+const power = new Image()
+power.src = '../../img/Effect_PowerChords_1_517x353.png'
+power.onload = function () { console.log('pwrChrds loaded') }
+const pwrSprite = new Sprite({ image: power, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 517, height: 353, rows: 7, cols: 9, drawnWidth: 18, drawnHeight: 10 })
 
-const projAura = new Image()
-projAura.src = '../../img/Effect_EldenRing_1_421x425.png'
-projAura.onload = function () { console.log('projAura loaded') }
+const worm = new Image()
+worm.src = '../../img/Effect_Worm_1_421x369.png'
+worm.onload = function () { console.log('worm loaded') }
+const wrmSprite = new Sprite({ image: worm, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 421, height: 369, rows: 7, cols: 9, drawnWidth: 18, drawnHeight: 10 })
+
+const tentacles = new Image()
+tentacles.src = '../../img/Effect_Tentacles_1_433x337.png'
+tentacles.onload = function () { console.log('tenta loaded') }
+const tntSprite = new Sprite({ image: tentacles, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 433, height: 337, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
+
+const trlSprites = [pwrSprite, wrmSprite, tntSprite]
+const hitImages = [smallHitBlue, smallHitGreen, smallHitRed, smallHitYellow, smallHitWhite]
