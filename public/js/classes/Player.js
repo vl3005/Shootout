@@ -17,11 +17,16 @@ class Player {
     this.playerSpeed = { x: 0, y: 0 }
     this.shield = 100
     this.energy = 200
+    this.newEnergy = 200
     this.aimAngle = Math.random() * 2*Math.PI
     this.moveAngle = Math.random() * 2 * Math.PI
     this.newAngle = this.aimAngle + 2 * Math.PI
+    this.projSpinAngle = 0
     this.angleCos = Math.cos(this.aimAngle);
     this.angleSin = Math.sin(this.aimAngle);
+    this.splashSprite = smlHitSprite.clone()
+    this.splashSprite.image = imageMap.get(hitImages[this.craft.hitType])
+    this.stuck = false
     this.replenishBuffer = null;
     this.shieldReplenish = null;    
     this.energyReplenish = null;
@@ -64,11 +69,12 @@ class Player {
 
 
   }  
+  // TODO: Consider making the shield rotate indefinitely regardless of move angle. Might look better.
 
   drawShield() {
     if (!this.isDead && this.shield > 0) {
       c.save()
-      let noiseFactor = 2.2
+      let noiseFactor = 2.5
       if (this.shieldReplenish == null) {
         this.noiseSpeed = 0.003 + (100 - this.shield) / 5000;
         noiseFactor = 2.8 + (1 - this.shield / 100) / 300
@@ -92,11 +98,10 @@ class Player {
       else this.newAngle = targetAngle            
       c.beginPath();
       c.moveTo(this.points[0].x, this.points[0].y);
-      //let angle = Math.atan2(this.playerSpeed.y, this.playerSpeed.x)
       for (let i = 0; i < this.numPoints; i++) {
         const point = this.points[i];
 
-        const angle = (this.newAngle + Math.PI) /*% (Math.PI *2)*/ + i * Math.PI * 2 / this.numPoints;
+        const angle = (this.newAngle + Math.PI) + i * Math.PI * 2 / this.numPoints;
         const distanceFromCenter = currentShieldRadius + Math.sin(Date.now() * this.noiseSpeed + point.noiseOffsetX) * noiseFactor;
 
         point.x = this.x + Math.cos(angle) * distanceFromCenter;
@@ -137,16 +142,17 @@ class Player {
   reload(clickBuffer, shootCost) {
     this.cannonX = this.x
     this.cannonY = this.y    
-    if (this.energy < shootCost) this.energyDepleted = true
+    if (this.newEnergy < shootCost) this.energyDepleted = true
 
     this.reloadInt = setInterval(() => {      
-      if (this.cannonRadius < 4 && this.energy >= shootCost) {
+      if (this.cannonRadius < 4 && this.newEnergy >= shootCost) {
         this.isReloading = true
         if (this.energyDepleted) {
           sounds.gunRestored.play()
           this.energyDepleted = false
         }
         this.cannonRadius += 0.42
+        this.energy += (Math.sign(this.newEnergy-this.energy)*shootCost/10)
       }
       else if (this.cannonRadius >= 4) {
         this.cannonRadius = 4
@@ -164,24 +170,23 @@ class Player {
     if (!this.isDead) {
       this.cannonX = this.x + (this.radius + 2.5) * this.angleCos
       this.cannonY = this.y + (this.radius + 2.5) * this.angleSin
-      c.save()
-      const spinAngle = 4000*this.bAngle
+      c.save()      
       c.shadowBlur = 4
       c.shadowColor = this.craft.sColor
       c.globalAlpha = this.opacity
       c.beginPath()
       c.arc(this.cannonX, this.cannonY, this.cannonRadius, 0, Math.PI * 2, false)
       c.strokeStyle = this.craft.sColor
-      c.lineWidth = 2
+      c.lineWidth = 3
       c.stroke()
       c.arc(this.cannonX, this.cannonY, this.cannonRadius, 0, Math.PI * 2, false)
       c.fillStyle = this.craft.mColor
       c.fill()
       c.beginPath()
-      this.cannonGradient = c.createRadialGradient(this.cannonX + (2 * this.cannonRadius) * Math.cos(spinAngle),
-        this.cannonY + (2 * this.cannonRadius) * Math.sin(spinAngle), this.cannonRadius,
-        this.cannonX + (2.2 * this.cannonRadius) * Math.cos(spinAngle),
-        this.cannonY + (2.2 * this.cannonRadius) * Math.sin(spinAngle), 2.8*this.cannonRadius)
+      this.cannonGradient = c.createRadialGradient(this.cannonX + (2 * this.cannonRadius) * Math.cos(this.projSpinAngle),
+        this.cannonY + (2 * this.cannonRadius) * Math.sin(this.projSpinAngle), this.cannonRadius,
+        this.cannonX + (2.2 * this.cannonRadius) * Math.cos(this.projSpinAngle),
+        this.cannonY + (2.2 * this.cannonRadius) * Math.sin(this.projSpinAngle), 2.8*this.cannonRadius)
       this.cannonGradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Shine effect at the start
       this.cannonGradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)'); // Shine effect at the start
       this.cannonGradient.addColorStop(0.8, this.craft.mColor);               // Your color in the middle
@@ -200,7 +205,7 @@ class Player {
       c.save()
       let statsX = this.x + this.radius + 10;
       this.shieldN = `S: ${Math.min(this.shield, 100).toFixed(0)}%`
-      this.energyN = `E: ${(Math.min(200, Math.max(this.energy, 0)) / 200 * 100).toFixed(0)}%`
+      this.energyN = `E: ${(Math.min(200, Math.max(this.newEnergy, 0)) / 200 * 100).toFixed(0)}%`
       c.shadowBlur = 3
       c.shadowColor = this.craft.sColor
       c.font = '800 18px Stick No Bills'
@@ -246,18 +251,26 @@ class Player {
     }    
   }
 
-  drawEnergyWidget() {
-     
+  drawEnergyWidget() {     
     if (!this.isDead) {
-      if (this.energy >= 4)  
+      if (!this.isReloading) this.energy += Math.sign(this.newEnergy-this.energy)
+      if (this.newEnergy >= 8)  
       {
         c.save()   
         c.beginPath();
         c.shadowColor = this.craft.sColor
         c.shadowBlur = 3
-        c.arc(this.x, this.y, this.radius + 2.5, Math.PI + this.aimAngle + ((1 - this.energy / 200) * Math.PI)+0.05, 3 * Math.PI + this.aimAngle - ((1 - this.energy / 200) * Math.PI)-0.05);      
+        c.arc(this.x, this.y, this.radius + 3, Math.PI + this.aimAngle + ((1 - this.energy / 200) * Math.PI), 3 * Math.PI + this.aimAngle - ((1 - this.energy / 200) * Math.PI));     
+        c.closePath()
+        c.fillStyle = this.craft.sColor
+        
+        c.globalAlpha = 0.12
+        c.fill();
+        c.beginPath()
+        c.arc(this.x, this.y, this.radius + 3, Math.PI + this.aimAngle + ((1 - this.energy / 200) * Math.PI) + 0.05, 3 * Math.PI + this.aimAngle - ((1 - this.energy / 200) * Math.PI) - 0.05);      
         c.strokeStyle = this.craft.sColor
         c.lineWidth = 2
+        c.globalAlpha = 1
         c.lineCap = "round";
         c.lineJoin = "round";
         c.stroke();
@@ -267,13 +280,13 @@ class Player {
     
   }
 
-  
 
   replenishEnergy() {
-    if (this.energy < 200) {
-      this.energy += 0.75 + 0.75 * Math.round((1 - this.energy / 200) * 100) / 100
-      
+    if (this.newEnergy < 200) {
+      this.newEnergy += 0.5 + 1.27 * Math.round((1 - this.newEnergy / 200) * 100) / 100
+      this.energy = this.newEnergy
     } else {
+      this.newEnergy = 200
       this.energy = 200
       clearInterval(this.energyReplenish)
       this.energyReplenish = null

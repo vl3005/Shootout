@@ -10,11 +10,12 @@ class Projectile {
     this.velocity = velocity
     this.speed = speed
     this.angle = angle
+    //this.splashSprite = smlHitSprite.clone()
+    //this.splashSprite.image = imageMap.get(hitImages[this.craft.hitType])
     this.bAngle = 0;
-    //this.trail = new Sprite(trail, 0, 0, 60,0, true, 517, 353, 7, 9, 29, 50)
     this.hasRicocheted = false
     this.distanceTraveled = 0;    
-    this.maxDistance = window.canvasDiag-40;
+    this.maxDistance = window.canvasDiag*0.92;
     this.maxDamage = 24;
     this.distanceRatio = 0;
     this.ricochetPens = 0;
@@ -52,38 +53,32 @@ class Projectile {
   }
 
   draw() {
-        
-    //c.save()    
-    //c.translate(this.trail.x, this.trail.y)    
-    //c.rotate(this.angle)    
-    //this.trail.draw()
-    //c.restore()
     c.save()
     c.beginPath()
+    c.arc(this.x - Math.cos(this.angle) * 3, this.y - Math.sin(this.angle) * 3, this.radius*0.8, 0, Math.PI * 2, false)
+    c.fillStyle = this.craft.sColor   
+    c.fill()
+    c.fillStyle = this.gradient
+    c.closePath()
+    c.fill()
+    c.beginPath()
     c.shadowBlur = 4 + 2 * this.distanceRatio
-    c.shadowColor = this.craft.sColor   
+    c.shadowColor = this.craft.sColor
     c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.mColor
     c.fill()
-    c.fillStyle = this.gradient    
+    c.fillStyle = this.gradient
     c.fill()
     c.closePath()    
     c.beginPath()
-    c.arc(this.x - Math.cos(this.angle) * 5, this.y - Math.sin(this.angle) * 5, this.radius*0.8, 0, Math.PI * 2, false)
+    c.arc(this.x - Math.cos(this.angle) * 6, this.y - Math.sin(this.angle) * 6, this.radius*0.5, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.sColor   
     c.fill()
     c.fillStyle = this.gradient
     c.closePath()
     c.fill()
     c.beginPath()
-    c.arc(this.x - Math.cos(this.angle) * 8, this.y - Math.sin(this.angle) * 8, this.radius*0.5, 0, Math.PI * 2, false)
-    c.fillStyle = this.craft.sColor   
-    c.fill()
-    c.fillStyle = this.gradient
-    c.closePath()
-    c.fill()
-    c.beginPath()
-    c.arc(this.x - Math.cos(this.angle) * 10, this.y - Math.sin(this.angle) * 10, this.radius*0.3, 0, Math.PI * 2, false)
+    c.arc(this.x - Math.cos(this.angle) * 8, this.y - Math.sin(this.angle) * 8, this.radius*0.3, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.sColor   
     c.fill()
     c.fillStyle = this.gradient

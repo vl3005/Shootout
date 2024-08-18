@@ -1,25 +1,35 @@
 ﻿import express from 'express'
-const app = express()
-const port = 3000
+//const app = express()
+//const port = 3000
 import http from 'http'
-import util from 'util'
-const server = http.createServer(app)
 import { Server } from 'socket.io'
 import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
 import { setInterval } from 'timers'
 
+const app = express()
+const port = 3000
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const io = new Server(server, { pingInterval: 2000, pingTimeout: 5000 })
 
-//app.use(express.static('public'))
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/index.html')
+  console.log('get function');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
+
+
+
+const server = http.createServer(app)
+
+server.listen(port, () => {
+  console.log(`${formatDate(new Date(Date.now()))} - Game server listening on port ${port}.`)
+  console.log(`${formatDate(new Date(Date.now()))} - Server loaded.`)
+})
+
+const io = new Server(server, { pingInterval: 2000, pingTimeout: 5000 })
 
 const crafts = [
   { name: 'Void Raptor',      mColor: '#000000', /* Black */        sColor: '#f54242', aColor: '#FFFFFF', inUse: false, trlType: 1, hitType: 2 },
@@ -40,6 +50,8 @@ const crafts = [
 const backEndPlayers = {}
 const backEndProjectiles = {}
 const backEndParticles = {}
+const playerSocketIDs = new Map()
+let socketIDArray = Array.from(playerSocketIDs.keys())
 const activeDecInts = {}
 let backEndPlayer;
 let canvas = {}
@@ -62,7 +74,12 @@ function check2Big(num) {
 
   }
 }
-
+function checkCollision(playerA, playerB) {
+  const dx = playerA.x - playerB.x; // Difference in X coordinates
+  const dy = playerA.y - playerB.y; // Difference in Y coordinates
+  const distance = Math.hypot(dx, dy); // Euclidean distance
+  return distance < (2*playerA.radius+12); // Collision if distance < sum of radii
+}
 function siftArray(arr, property) {
   return arr
     .map((item, index) => item[property] === false ? index : -1) // Map to indices where property is false
@@ -90,7 +107,11 @@ io.on('connection', (SOCKET) => {
     } catch (error) {
       console.error(`${formatDate(new Date(Date.now())) } - Error in disconnect handler: ${error}`);
     }
+    
+    playerSocketIDs.delete(SOCKET.id)
+    socketIDArray = Array.from(playerSocketIDs.keys())
     delete backEndPlayers[SOCKET.id];
+    console.log(playerSocketIDs)
   });
 
   io.emit('updatePlayers', backEndPlayers)
@@ -125,8 +146,12 @@ io.on('connection', (SOCKET) => {
     if (backEndPlayers[SOCKET.id])
     backEndPlayers[SOCKET.id].onMap = true
   }) 
-  SOCKET.on('updateEnergy', (energy) => {
-    backEndPlayers[SOCKET.id].energy = energy
+  SOCKET.on('updateEnergy', ({newEnergy, energy}) => {
+    if (backEndPlayers[SOCKET.id]) {
+      backEndPlayers[SOCKET.id].energy = energy
+      backEndPlayers[SOCKET.id].newEnergy = newEnergy
+
+    }
   })
 
   SOCKET.on('updateShield', ({ shield, playerId, isReplenishing }) => {
@@ -148,7 +173,6 @@ io.on('connection', (SOCKET) => {
     for (let i = 0; i < 24; i++) rand.push(Math.random())
     const availableCraftsInd = siftArray(crafts, 'inUse')
     console.log(availableCraftsInd)
-    console.log(crafts)
     if (availableCraftsInd.length > 0) {
       chosenCraftIndex = availableCraftsInd[Math.floor(Math.random() * availableCraftsInd.length)]      
     } else return 
@@ -157,10 +181,12 @@ io.on('connection', (SOCKET) => {
       y,
       craft: crafts[chosenCraftIndex],
       chosenCraftIndex,
-      energy:200,
+      energy: 200,
+      newEnergy: 200,
       sequenceNumber: 0,
       score: 0,
       username,
+      stuck: false,
       text: username,
       isDead,      
       onMap: false,
@@ -182,7 +208,10 @@ io.on('connection', (SOCKET) => {
       isReplenishing: null,
       rand
     }
+    playerSocketIDs.set(SOCKET.id, SOCKET)
+    socketIDArray.push(SOCKET.id)
     crafts[chosenCraftIndex].inUse = true
+    console.log(playerSocketIDs,socketIDArray)
     console.log(`${ formatDate(new Date(Date.now()))} - ${backEndPlayers[SOCKET.id].ip}'s name is ${backEndPlayers[SOCKET.id].username}`)
     backEndRespawnTime = RESPAWNTIME   
 
@@ -265,24 +294,37 @@ io.on('connection', (SOCKET) => {
     }
 
     if (playerSides.left <= 0) {
-      backEndPlayers[SOCKET.id].x = backEndPlayer.radius + 1
-      backEndPlayers[SOCKET.id].x += backEndPlayers[SOCKET.id].playerSpeed.x* -1.2
-      SOCKET.emit('playerHitBarrier')
+      //backEndPlayers[SOCKET.id].x = backEndPlayer.radius + 1
+      backEndPlayers[SOCKET.id].stuck = true
+      SOCKET.emit('playerHitBarrier', 'left')
+      setTimeout(() => {
+        backEndPlayers[SOCKET.id].stuck = false
+      }, 300)
+      console.log(Math.sign(backEndPlayers[SOCKET.id].playerSpeed.x))
     } else
       if (playerSides.right >= canvas.width) {
-        backEndPlayers[SOCKET.id].x = canvas.width - backEndPlayer.radius -1
-        backEndPlayers[SOCKET.id].x += backEndPlayers[SOCKET.id].playerSpeed.x* -1.2
-        SOCKET.emit('playerHitBarrier')
+        //backEndPlayers[SOCKET.id].x = canvas.width - backEndPlayer.radius -1
+        backEndPlayers[SOCKET.id].stuck = true
+        SOCKET.emit('playerHitBarrier', 'right')
+        setTimeout(() => {
+          backEndPlayers[SOCKET.id].stuck = false
+        }, 300)
       }
     if (playerSides.top <= 0) {
-      backEndPlayers[SOCKET.id].y = backEndPlayer.radius +1
-      backEndPlayers[SOCKET.id].y += backEndPlayers[SOCKET.id].playerSpeed.y* -1.2
-      SOCKET.emit('playerHitBarrier')
+      //backEndPlayers[SOCKET.id].y = backEndPlayer.radius +1
+      backEndPlayers[SOCKET.id].stuck = true
+      SOCKET.emit('playerHitBarrier','top')
+      setTimeout(() => {
+        backEndPlayers[SOCKET.id].stuck = false
+      }, 300)
     } else    
     if (playerSides.bottom >= canvas.height) {
-      backEndPlayers[SOCKET.id].y = canvas.height - backEndPlayer.radius -1
-      backEndPlayers[SOCKET.id].y += backEndPlayers[SOCKET.id].playerSpeed.y * -1.2      
-      SOCKET.emit('playerHitBarrier')
+      //backEndPlayers[SOCKET.id].y = canvas.height - backEndPlayer.radius -1
+      backEndPlayers[SOCKET.id].stuck = true
+      SOCKET.emit('playerHitBarrier','bottom')
+      setTimeout(() => {
+        backEndPlayers[SOCKET.id].stuck = false
+      }, 300)
     }
     const end = process.hrtime.bigint(); // End timer
     const durationInMilliseconds = (Number(end - start)) / 1000000;
@@ -293,26 +335,12 @@ io.on('connection', (SOCKET) => {
     if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now()))} - KeyDown time: ${timerResult} ms`);
 
   })
-
-  function speedChanged(old, current) {
-    // Check if either value is zero
-    if (current === 0) {
-      return true;
-    }
-
-    // Check if the sign has changed
-    return (old >= 0 && current < 0) || (old < 0 && current >= 0);
-  }
   
 
   SOCKET.on('keyup', ({ key, KEYS, PLAYERSPEED }) => {
     let id = SOCKET.id
-    if (backEndPlayers[id].isDead || !backEndPlayers[id]) return
-    backEndPlayers[id].playerSpeed = PLAYERSPEED
-    let changedX = false
-    let changedY = false
-    let tempXSpeed;
-    let tempYSpeed;
+    if (!backEndPlayers[id] || backEndPlayers[id].isDead) return
+    backEndPlayers[id].playerSpeed = PLAYERSPEED 
     if (KEYS.w.pressed == false &&
       KEYS.a.pressed == false &&
       KEYS.s.pressed == false &&
@@ -321,148 +349,136 @@ io.on('connection', (SOCKET) => {
       backEndPlayers[id].moveAngle += Math.PI
       backEndPlayers[id].moveAngle %= 2 * Math.PI
     }
-    let factorX = 1
-    let factorY = 1
     backEndPlayers[id].lastXKey = KEYS.lastXKey
     backEndPlayers[id].lastYKey = KEYS.lastYKey
     switch (key) {
       case 'KeyW':
-        clearInterval(activeDecInts[id].y)
-        activeDecInts[id].y = null        
-        tempYSpeed = backEndPlayers[id].playerSpeed.y        
-        SOCKET.emit('decelerating', ({ DecelY: true }))
-        activeDecInts[id].y = setInterval(() => {
-          if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
-            clearInterval(activeDecInts[id].y)
-            activeDecInts[id].y = null
-            return
-          }
-          backEndPlayers[id].playerSpeed.y += dV          
-          if (!changedY && backEndPlayers[id].y - backEndPlayers[id].radius <= 0) {
-            changedY = true
-            factorY = -1
-            SOCKET.emit('playerHitBarrier')
-            backEndPlayers[id].y = backEndPlayers[id].radius + 1
-            backEndPlayers[id].playerSpeed.y *= 1.1
-          }
-          
-          backEndPlayers[id].y += backEndPlayers[id].playerSpeed.y * factorY
-          if (speedChanged(tempYSpeed,backEndPlayers[id].playerSpeed.y)) {
-            clearInterval(activeDecInts[id].y)
-            activeDecInts[id].y = null
-            SOCKET.emit('decelerating', ({ DecelY: false}))
-            backEndPlayers[id].playerSpeed.y = 0
-          } else { }
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          tempYSpeed = backEndPlayers[id].playerSpeed.y 
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
-        }, 15)
-          break
+        if (backEndPlayers[id].playerSpeed.y >= 0) return
+        decelOnY(id,2)
+        break
       case 'KeyA':
-        clearInterval(activeDecInts[id].x)
-        activeDecInts[id].x = null
-        tempXSpeed = backEndPlayers[id].playerSpeed.x
-        SOCKET.emit('decelerating', ({ DecelX: true }))
-        activeDecInts[id].x = setInterval(() => {
-          if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
-            clearInterval(activeDecInts[id].x)
-            activeDecInts[id].x = null
-            return
-          }
-          backEndPlayers[id].playerSpeed.x += dV
-          if (!changedX && backEndPlayers[id].x - backEndPlayers[id].radius < 0) {
-            changedX = true
-            factorX = -1
-            SOCKET.emit('playerHitBarrier')
-            backEndPlayers[id].x = backEndPlayers[id].radius + 1
-            backEndPlayers[id].playerSpeed.x *= 1.1
-          }
-          
-          backEndPlayers[id].x += backEndPlayers[id].playerSpeed.x * factorX
-          if (speedChanged(tempXSpeed, backEndPlayers[id].playerSpeed.x)) {
-              clearInterval(activeDecInts[id].x)
-              activeDecInts[id].x = null
-              SOCKET.emit('decelerating', ({DecelX: false}))
-              backEndPlayers[id].playerSpeed.x = 0
-            } else { }          
-          tempXSpeed = backEndPlayers[id].playerSpeed.x
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
-        }, 15)      
-          break
+        if (backEndPlayers[id].playerSpeed.x >= 0) return
+        decelOnX(id, 1)   
+        break
       case 'KeyS':
-        clearInterval(activeDecInts[id].y)
-        activeDecInts[id].y = null
-        tempYSpeed = backEndPlayers[id].playerSpeed.y
-        SOCKET.emit('decelerating', ({ DecelY: true }))
-        activeDecInts[id].y = setInterval(() => {
-          if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
-            clearInterval(activeDecInts[id].y)
-            activeDecInts[id].y = null
-            return
-          }
-          backEndPlayers[id].playerSpeed.y -= dV
-          if (!changedY && backEndPlayers[id].y + backEndPlayers[id].radius >= canvas.height) {
-            changedY = true
-            factorY = -1
-            SOCKET.emit('playerHitBarrier')
-            backEndPlayers[id].y = canvas.height - backEndPlayers[id].radius - 1
-            backEndPlayers[id].playerSpeed.y *= 1.1
-          }
-
-          backEndPlayers[id].y += backEndPlayers[id].playerSpeed.y * factorY
-          if (speedChanged(tempYSpeed, backEndPlayers[id].playerSpeed.y)) {
-            clearInterval(activeDecInts[id].y)
-            activeDecInts[id].y = null
-            SOCKET.emit('decelerating', ({ DecelY: false }))
-            backEndPlayers[id].playerSpeed.y = 0
-          } else { }
-          tempYSpeed = backEndPlayers[id].playerSpeed.y
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)          
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
-        }, 15)
-          break
+        if (backEndPlayers[id].playerSpeed.y <= 0) return
+        decelOnY(id, -2)
+        break
       case 'KeyD':
-        clearInterval(activeDecInts[id].x)
-        activeDecInts[id].x = null
-        tempXSpeed = backEndPlayers[id].x
-        SOCKET.emit('decelerating', ({ DecelX: true }))
-        activeDecInts[id].x = setInterval(() => {
-          if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
-            clearInterval(activeDecInts[id].x)
-            activeDecInts[id].x = null
-            return
-          }
-          backEndPlayers[id].playerSpeed.x -= dV
-          if (!changedX && backEndPlayers[id].x + backEndPlayers[id].radius >= canvas.width) {
-            changedX = true
-            factorX = -1
-            SOCKET.emit('playerHitBarrier')
-            backEndPlayers[id].x = canvas.width - backEndPlayers[id].radius - 1
-            backEndPlayers[id].playerSpeed.x *= 1.1
-          }
-
-          backEndPlayers[id].x += backEndPlayers[id].playerSpeed.x * factorX
-          if (speedChanged(tempXSpeed, backEndPlayers[id].playerSpeed.x)) {
-            clearInterval(activeDecInts[id].x)
-            activeDecInts[id].x = null
-            SOCKET.emit('decelerating', ({ DecelX: false }))
-            backEndPlayers[id].playerSpeed.x = 0
-          } else { }
-          tempXSpeed = backEndPlayers[id].playerSpeed.x
-          backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
-          SOCKET.emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
-          SOCKET.broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[SOCKET.id].thrusterOutput, id: SOCKET.id }))
-        }, 15)   
+        if (backEndPlayers[id].playerSpeed.x <= 0) return
+        decelOnX(id, -1)       
         break
       }
     })
-  })
+})
+function speedChanged(old, current) {
+  if (Math.sign(old) == Math.sign(current)) return false
+  else return true
+}
+function checkBarrierSide(id, side) {
+  switch (side) {
+    case 2:
+      if (backEndPlayers[id].y - backEndPlayers[id].radius <= 0) {
+        backEndPlayers[id].y = backEndPlayers[id].radius + 1
+        return true
+      }
+      else return false
+      break
+    case -2:
+      if (backEndPlayers[id].y + backEndPlayers[id].radius >= canvas.height) {
+        backEndPlayers[id].y = canvas.height - backEndPlayers[id].radius - 1
+        return true
+      }
+      else return false
+      break
+    case 1:
+      if (backEndPlayers[id].x - backEndPlayers[id].radius <= 0) {
+        backEndPlayers[id].x = backEndPlayers[id].radius + 1
+        return true
+      }
+      else return false
+      break
+    case -1:
+      if (backEndPlayers[id].x + backEndPlayers[id].radius >= canvas.width) {
+        backEndPlayers[id].x = canvas.width - backEndPlayers[id].radius - 1
+        return true
+      }
+      else return false
+      break
+  }
 
+}
 
+function decelOnY(id, side) {
+  clearInterval(activeDecInts[id].y)
+  activeDecInts[id].y = null
+  let changedY = false
+  let factorY = 1
+  let tempYSpeed = backEndPlayers[id].playerSpeed.y
+  playerSocketIDs.get(id).emit('decelerating', ({ DecelY: true }))
+  activeDecInts[id].y = setInterval(() => {
+    if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
+      clearInterval(activeDecInts[id].y)
+      activeDecInts[id].y = null
+      return
+    }
+    backEndPlayers[id].playerSpeed.y += dV * Math.sign(side)
+    if (!changedY && checkBarrierSide(id, side)) {
+      changedY = true
+      factorY = -1
+      playerSocketIDs.get(id).emit('playerHitBarrier')
+      backEndPlayers[id].playerSpeed.y *= 1.05
+    }
+
+    backEndPlayers[id].y += backEndPlayers[id].playerSpeed.y * factorY
+    if (speedChanged(tempYSpeed, backEndPlayers[id].playerSpeed.y)) {
+      clearInterval(activeDecInts[id].y)
+      activeDecInts[id].y = null
+      playerSocketIDs.get(id).emit('decelerating', ({ DecelY: false }))
+      backEndPlayers[id].playerSpeed.y = 0
+    } else { }
+    tempYSpeed = backEndPlayers[id].playerSpeed.y
+    if (backEndPlayers[id].stuck) backEndPlayers[id].thrusterOutput = 0
+    else backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+    playerSocketIDs.get(id).emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+    playerSocketIDs.get(id).broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[id].thrusterOutput, id }))
+  }, 15)
+}
+function decelOnX(id, side) {
+  clearInterval(activeDecInts[id].x)
+  activeDecInts[id].x = null
+  let changedX = false
+  let factorX = 1
+  let tempXSpeed = backEndPlayers[id].playerSpeed.x
+  playerSocketIDs.get(id).emit('decelerating', ({ DecelX: true }))
+  activeDecInts[id].x = setInterval(() => {
+    if (backEndPlayers[id].isDead || !backEndPlayers[id]) {
+      clearInterval(activeDecInts[id].x)
+      activeDecInts[id].x = null
+      return
+    }
+    backEndPlayers[id].playerSpeed.x += dV * Math.sign(side)
+    if (!changedX && checkBarrierSide(id, side)) {
+      changedX = true
+      factorX = -1
+      playerSocketIDs.get(id).emit('playerHitBarrier')
+      backEndPlayers[id].playerSpeed.x *= 1.05
+    }
+
+    backEndPlayers[id].x += backEndPlayers[id].playerSpeed.x * factorX
+    if (speedChanged(tempXSpeed, backEndPlayers[id].playerSpeed.x)) {
+      clearInterval(activeDecInts[id].x)
+      activeDecInts[id].x = null
+      playerSocketIDs.get(id).emit('decelerating', ({ DecelX: false }))
+      backEndPlayers[id].playerSpeed.x = 0
+    } else { }
+    tempXSpeed = backEndPlayers[id].playerSpeed.x
+    if (backEndPlayers[id].stuck) backEndPlayers[id].thrusterOutput = 0
+    else backEndPlayers[id].thrusterOutput = Math.hypot(backEndPlayers[id].playerSpeed.y, backEndPlayers[id].playerSpeed.x)
+    playerSocketIDs.get(id).emit('updateSpeed', ({ newSpeed: backEndPlayers[id].playerSpeed, id }))
+    playerSocketIDs.get(id).broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[id].thrusterOutput, id }))
+  }, 15)
+}
 
 function createParticles(array, projectile,target,min, range, velFacX = 80, velFacY = 80, part_rad,color) {
   let thisVelFacX;
@@ -478,8 +494,8 @@ function createParticles(array, projectile,target,min, range, velFacX = 80, velF
     if (Object.keys(backEndParticles).length === 0) particleId = 0
     else particleId = check2Big(particleId)
     array[particleId] = {
-      x: target.x + projectile.velocity.x*0.5,
-      y: target.y + projectile.velocity.y * 0.5,
+      x: target.x, //+ projectile.velocity.x*0.5,
+      y: target.y, //+ projectile.velocity.y * 0.5,
       radius: part_rad * ((Math.random() * 0.2) + 0.7),
       velocity: {
         x: randomX * 1.2,
@@ -500,6 +516,7 @@ async function countRespawn(playerId) {
   for (let i = backEndRespawnTime; i > 0; i--) {
     if (!backEndPlayers[playerId]) break;
     backEndPlayers[playerId].text = `[ ${i} ]`;
+    console.log(`${formatDate(new Date(Date.now()))} - ${backEndPlayers[playerId].username}'s respawning in ${i}...`)
     io.emit('updateText', ({text: backEndPlayers[playerId].text, playerId}))
     if (i > 1) { 
       await sleep(1000); // Pause for 1 second
@@ -529,13 +546,66 @@ function formatDate(date) {
 
   return `${day}/${month}/${year} - ${hours}:${minutes}:${seconds}.${milliseconds}`;
 }
+function getVelocityVector(speedX, speedY) {
+  return { x: speedX, y: speedY };
+}
+function resolveVelocities(velocity1, velocity2, normal) {
+  const dot1 = velocity1.x * normal.x + velocity1.y * normal.y;
+  const dot2 = velocity2.x * normal.x + velocity2.y * normal.y;
+
+  return {
+    normal1: dot1,
+    normal2: dot2,
+    tangent1: { x: velocity1.x - dot1 * normal.x, y: velocity1.y - dot1 * normal.y },
+    tangent2: { x: velocity2.x - dot2 * normal.x, y: velocity2.y - dot2 * normal.y }
+  };
+}
+function updateNormalComponents(normal1, normal2) {
+  return { normal1: normal2, normal2: normal1 };
+}
+function combineComponents(normal1, tangent1, normal2, tangent2, normal) {
+  const finalVelocity1 = {
+    x: normal1 * normal.x + tangent1.x,
+    y: normal1 * normal.y + tangent1.y
+  };
+  const finalVelocity2 = {
+    x: normal2 * normal.x + tangent2.x,
+    y: normal2 * normal.y + tangent2.y
+  };
+
+  return { finalVelocity1, finalVelocity2 };
+}
+function computeCollisionVelocities(player1SpeedX, player1SpeedY, player1Angle, player2SpeedX, player2SpeedY, player2Angle) {
+  // Convert angles to velocity vectors
+  const velocity1 = getVelocityVector(player1SpeedX, player1SpeedY);
+  const velocity2 = getVelocityVector(player2SpeedX, player2SpeedY);
+
+  // Assume normal vector (you need to calculate this based on the collision point)
+  const normal = { x: Math.cos(player1Angle - player2Angle), y: Math.sin(player1Angle - player2Angle) };
+
+  // Normalize normal vector
+  const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+  normal.x /= length;
+  normal.y /= length;
+
+  // Resolve velocities into normal and tangent components
+  const { normal1, normal2, tangent1, tangent2 } = resolveVelocities(velocity1, velocity2, normal);
+
+  // Update normal components
+  const { normal1: newNormal1, normal2: newNormal2 } = updateNormalComponents(normal1, normal2);
+
+  // Combine components to get final velocities
+  const { finalVelocity1, finalVelocity2 } = combineComponents(newNormal1, tangent1, newNormal2, tangent2, normal);
+
+  return { finalVelocity1, finalVelocity2 };
+}
 
 function checkObjBarrierCollision(obj, objRad) {
-  if (obj.x + objRad >= canvas.width) return { side: 'right', hasCollided: true }
-  if (obj.x - objRad <= 0) return { side: 'left', hasCollided: true }
-  if (obj.y + objRad >= canvas.height) return { side: 'bottom', hasCollided: true }
-  if (obj.y - objRad <= 0) return { side: 'top', hasCollided: true }
-  return {side: '', hasCollided: false}
+  if (obj.x + objRad >= canvas.width) return 'right'
+  if (obj.x - objRad <= 0) return 'left'
+  if (obj.y + objRad >= canvas.height) return 'bottom'
+  if (obj.y - objRad <= 0) return 'top'
+  return false
 }
 
 //                                     BACK END TICKER
@@ -548,10 +618,10 @@ setInterval(() => {
         backEndProjectiles[id].x += backEndProjectiles[id].velocity.x / PROJ_INCREMENTS
         backEndProjectiles[id].y += backEndProjectiles[id].velocity.y / PROJ_INCREMENTS
 
-        //  Barrier Hit detection
+        //  Projectile on Barrier Hit detection
 
         const COLLISION = checkObjBarrierCollision(backEndProjectiles[id], PROJECTILE_RADIUS)
-        if (COLLISION.hasCollided) {
+        if (COLLISION) {
           if (backEndProjectiles[id].isSpent) {
               velFacX = backEndProjectiles[id].x
               velFacY = backEndProjectiles[id].y
@@ -559,13 +629,13 @@ setInterval(() => {
               createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 5, 2, velFacX, velFacY, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor)
               io.emit('updateParticles', { backEndParticles, randomI: Math.random() })            
               backEndProjectiles[id].isDead = true              
-              io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION.side, id })
+              io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION, id })
               delete backEndProjectiles[id]
               break
           } else {
             backEndProjectiles[id].hasRicocheted = true
             backEndProjectiles[id].ricochetPens++
-            switch (COLLISION.side) {
+            switch (COLLISION) {
               case 'left':
                 if (backEndProjectiles[id].velocity.x < 0)
                   backEndProjectiles[id].velocity.x *= -1
@@ -584,18 +654,18 @@ setInterval(() => {
               break
             }
             backEndProjectiles[id].angle = Math.atan2(backEndProjectiles[id].velocity.y, backEndProjectiles[id].velocity.x)
-            io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION.side, id })
+            io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION, id })
             backEndProjectiles[id].hasRicocheted = false
             break
           }
           
         }
 
-        //  Player Hit detection
+        //  Projectile on Player Hit detection
 
         for (const playerId in backEndPlayers) {
           const backEndPlayer = backEndPlayers[playerId]
-          const hitCircle = PROJECTILE_RADIUS + backEndPlayer.radius + 13 * (backEndPlayer.shield / 100)
+          const hitCircle = PROJECTILE_RADIUS + backEndPlayer.radius + 14 * (backEndPlayer.shield / 100)
           const DISTANCE = Math.floor(Math.hypot(backEndProjectiles[id].x - backEndPlayer.x,
             backEndProjectiles[id].y - backEndPlayer.y))
 
@@ -608,12 +678,12 @@ setInterval(() => {
               io.emit('updateParticles', { backEndParticles })
               backEndProjectiles[id].isDead = true
               io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
-              delete backEndProjectiles[id]
               backEndPlayers[playerId].isDead = true
               backEndPlayers[playerId].isRespawning = true
               countRespawn(playerId)
               console.log(`${formatDate(new Date(Date.now())) } - ${backEndPlayers[playerId].username} has died! Respawning soon...` )
-              io.emit('playerDies', {dyingPlayerId: playerId, rand1: Math.random()})
+              io.emit('playerDies', { dyingPlayerId: playerId, shooterId: backEndProjectiles[id].playerId, rand1: Math.random() })
+              delete backEndProjectiles[id]
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return
                 backEndPlayers[playerId].isDead = false
@@ -627,8 +697,8 @@ setInterval(() => {
             }
             else {
               io.emit('playerHit', { rand1: Math.random(), rand2: Math.random(), playerId, id, shooterId: backEndProjectiles[id].playerId })
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 1, 3, 500, 500, PROJECTILE_RADIUS * 1.2, backEndProjectiles[id].craft.mColor)
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 7, 3, 500, 500, PROJECTILE_RADIUS * 0.9, 'rgba(0, 30, 255, 1)')
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 4, 2, 500, 500, PROJECTILE_RADIUS * 1.2, backEndProjectiles[id].craft.mColor)
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 4, 3, 500, 500, PROJECTILE_RADIUS * 0.9, 'hsla(205, 100%, 50%, 1)')
               io.emit('updateParticles', { backEndParticles })
               backEndProjectiles[id].isDead = true
               io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
@@ -642,38 +712,86 @@ setInterval(() => {
 
   }
 
-    // Fix players clipping randomly (For some unknown reason)
+  // Fix players clipping randomly (For some unknown reason), and check for player on player collision
+  
 
-  for (const playerId in backEndPlayers) {
-    const backEndPlayer = backEndPlayers[playerId]
+  for (let i = 0; i < socketIDArray.length; i++) {    
+    const socketIDA = socketIDArray[i];
+    const backEndPlayer = backEndPlayers[socketIDA]
     const PLAYER_BARR_COLLISION = checkObjBarrierCollision(backEndPlayer, backEndPlayer.radius)
-    if (PLAYER_BARR_COLLISION.hasCollided && !(activeDecInts[playerId].x || activeDecInts[playerId].y)) //  Make sure every player is returned inside the canvas
+    if (PLAYER_BARR_COLLISION && backEndPlayer.stuck) //  Make sure every player is returned inside the canvas
     {
-      switch (PLAYER_BARR_COLLISION.side) {
+      switch (PLAYER_BARR_COLLISION) {
         case 'top':
-          backEndPlayers[playerId].y = backEndPlayers[playerId].radius + 1
-          clearInterval(activeDecInts[playerId].y)
-          activeDecInts[playerId].y = null
+          backEndPlayers[socketIDA].y = backEndPlayer.radius + 1
+          backEndPlayers[socketIDA].playerSpeed.y *= -1.05
+          backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].playerSpeed.y
+          decelOnY(socketIDA, -2)
+          console.log('helllo')
           break
         case 'bottom':
-          backEndPlayers[playerId].y = canvas.height - backEndPlayers[playerId].radius - 1
-          clearInterval(activeDecInts[playerId].y)
-          activeDecInts[playerId].y = null
+          backEndPlayers[socketIDA].y = canvas.height - backEndPlayer.radius - 1
+          backEndPlayers[socketIDA].playerSpeed.y *= -1.05
+          backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].playerSpeed.y
+          decelOnY(socketIDA, 2)
           break
         case 'left':
-          backEndPlayers[playerId].x = backEndPlayers[playerId].radius + 1
-          clearInterval(activeDecInts[playerId].x)
-          activeDecInts[playerId].x = null
+          backEndPlayers[socketIDA].x = backEndPlayer.radius + 1
+          backEndPlayers[socketIDA].playerSpeed.x *= -1.05
+          backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].playerSpeed.x
+          decelOnX(socketIDA, -1)
+          console.log('stuck left')
           break
         case 'right':
-          backEndPlayers[playerId].x = canvas.width - backEndPlayers[playerId].radius - 1
-          clearInterval(activeDecInts[playerId].x)
-          activeDecInts[playerId].x = null
+          backEndPlayers[socketIDA].x = canvas.width - backEndPlayer.radius - 1
+          backEndPlayers[socketIDA].playerSpeed.x *= -1.05
+          backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].playerSpeed.x
+          decelOnX(socketIDA, 1)
           break
       }
     }
+    for (let j = i + 1; j < socketIDArray.length; j++) {
+      const socketIDB = socketIDArray[j];      
+      if (checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB]) && (!backEndPlayers[socketIDA].stuck || !backEndPlayers[socketIDB].stuck)) {
+        backEndPlayers[socketIDA].stuck = true
+        backEndPlayers[socketIDB].stuck = true
+        setTimeout(() => {
+          if (!checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB])) {
+            backEndPlayers[socketIDA].stuck = false
+            backEndPlayers[socketIDB].stuck = false
+          }
+          else {
+            let randY = (Math.random() * (canvas.height - 120) + 120)
+            backEndPlayers[socketIDA].x = 120
+            backEndPlayers[socketIDB].x = canvas.width - 120
+            backEndPlayers[socketIDA].y = randY
+            backEndPlayers[socketIDB].y = canvas.height - randY
+            io.emit('untangle', ({ id1: socketIDA, id2: socketIDB, randY }))
+            backEndPlayers[socketIDA].stuck = false
+            backEndPlayers[socketIDB].stuck = false
+          }          
+        }, 300)
+        const finalSpeeds = computeCollisionVelocities(backEndPlayers[socketIDA].playerSpeed.x, backEndPlayers[socketIDA].playerSpeed.y, backEndPlayers[socketIDA].moveAngle,
+          backEndPlayers[socketIDB].playerSpeed.x, backEndPlayers[socketIDB].playerSpeed.y, backEndPlayers[socketIDB].moveAngle)
+        backEndPlayers[socketIDA].playerSpeed.x = finalSpeeds.finalVelocity1.x *1.25
+        backEndPlayers[socketIDA].playerSpeed.y = finalSpeeds.finalVelocity1.y*1.25
+        backEndPlayers[socketIDB].playerSpeed.x = finalSpeeds.finalVelocity2.x*1.25
+        backEndPlayers[socketIDB].playerSpeed.y = finalSpeeds.finalVelocity2.y*1.25
+        backEndPlayers[socketIDA].moveAngle = Math.atan2(backEndPlayers[socketIDA].playerSpeed.y, backEndPlayers[socketIDA].playerSpeed.x)
+        backEndPlayers[socketIDB].moveAngle = Math.atan2(backEndPlayers[socketIDB].playerSpeed.y, backEndPlayers[socketIDB].playerSpeed.x)
+        backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].radius * (1 + Math.sin(backEndPlayers[socketIDA].moveAngle))
+        backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].radius * (1 + Math.cos(backEndPlayers[socketIDA].moveAngle))
+        backEndPlayers[socketIDB].y += backEndPlayers[socketIDB].radius * (1 + Math.sin(backEndPlayers[socketIDB].moveAngle))
+        backEndPlayers[socketIDB].x += backEndPlayers[socketIDB].radius * (1 + Math.cos(backEndPlayers[socketIDB].moveAngle))
+        decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x)*-1)
+        decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y)*-2)
+        decelOnX(socketIDB, Math.sign(backEndPlayers[socketIDB].playerSpeed.x)*-1)
+        decelOnY(socketIDB, Math.sign(backEndPlayers[socketIDB].playerSpeed.y)*-2)
+      }
+    }
+    
   }
-
+   
   newBAngle = (newBAngle + 0.00005) % (2 * Math.PI)
   io.emit('getNewAngle', newBAngle)
   
@@ -684,11 +802,6 @@ setInterval(() => {
   // Format the duration to 4 decimal places
   const timerResult = durationInMilliseconds.toFixed(4);
   let warnTime = 2
-  if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now())) } - Back end ticker execution time: ${timerResult} ms.`);
+  if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now()))} - Back end ticker exceeded ${warnTime}. Execution time: ${timerResult} ms.`);
 }, 15)
 
-server.listen(port, () => {
-  console.log(`${formatDate(new Date(Date.now())) } - Game server listening on port ${port}.`)
-})
-
-console.log(`${formatDate(new Date(Date.now())) } - Server loaded.`)

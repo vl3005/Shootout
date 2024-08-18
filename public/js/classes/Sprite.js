@@ -1,3 +1,14 @@
+const imageMap = new Map();
+
+function preloadImage(name, url) {
+  if (!imageMap.has(name)) {
+    const img = new Image();
+    img.src = url;
+    imageMap.set(name, img);
+    img.onload = function () { console.log(`${name} image has loaded`) }
+  }
+}
+
 class Sprite {
   constructor({image, x, y, frameCount, normX = 1, normY = 1, startFrame=0, looped = false, rotate = false, colorize = 0, OffsetX=0,OffsetY=0, width, height, rows = 1, cols = 1, drawnWidth, drawnHeight}) {
     this.image = image
@@ -41,16 +52,6 @@ class Sprite {
         this.OffsetX - this.drawnWidth / 2 * this.normX, this.OffsetY - this.drawnHeight / 2 * this.normY,
         this.drawnWidth, this.drawnHeight
       );
-      if (this.colorize) {
-        c.globalAlpha = 0.8
-        c.globalCompositeOperation = 'source-atop'; // Ensures the color is applied only to the image
-        c.fillStyle = this.colorize; // 
-        c.fillRect(this.OffsetX - this.drawnWidth / 2, this.OffsetY - this.drawnHeight / 2, this.drawnWidth, this.drawnHeight);
-        //c.fillRect(0,0, canvas.width, canvas.height);
-
-        // Step 3: Reset the composite operation to default
-        c.globalCompositeOperation = 'source-over'; // This is the default value
-      }
     } else{
     c.drawImage(
       this.image,
@@ -81,12 +82,11 @@ class Sprite {
   }
 
 
-  resetSprite(x, y, angle=0,colorize=0) {
+  resetSprite(x, y, angle=0) {
     this.angle = angle
     this.currentFrame = this.startFrame
-    this.colorize = colorize
-    this.x = x //+ this.OffsetX //- this.drawnWidth / 2
-    this.y = y //+ this.OffsetY //- this.drawnHeight / 2
+    this.x = x 
+    this.y = y
     this.finished = false
   }
 
@@ -95,27 +95,33 @@ class Sprite {
     return new Sprite({ image:this.image, x:this.x, y:this.y, frameCount:this.frameCount, startFrame:this.startFrame, looped:this.looped, rotate:this.rotate, OffsetX:this.OffsetX, OffsetY:this.OffsetY, width: this.width, height: this.height, rows:this.rows, cols: this.cols, drawnWidth: this.drawnWidth, drawnHeight: this.drawnHeight });
   }
 }
-const explosion = new Image()
-explosion.src = '../../img/Effect_Explosion2_1_355x365.png'
-explosion.onload = function () { console.log('Explosion loaded') }
-const explSprite = new Sprite({image: explosion, x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 120,drawnHeight: 124})
 
-const smallHitBlue = new Image()
-smallHitBlue.src = '../../img/Effect_SmallHit_1_516x463_blue.png'
-smallHitBlue.onload = function () { console.log('smallHit_blue loaded') }
-const smallHitGreen = new Image()
-smallHitGreen.src = '../../img/Effect_SmallHit_1_516x463_green.png'
-smallHitGreen.onload = function () { console.log('smallHit_blue loaded') }
-const smallHitYellow = new Image()
-smallHitYellow.src = '../../img/Effect_SmallHit_1_516x463_yellow.png'
-smallHitYellow.onload = function () { console.log('smallHit_yellow loaded') }
-const smallHitRed = new Image()
-smallHitRed.src = '../../img/Effect_SmallHit_1_516x463_red.png'
-smallHitRed.onload = function () { console.log('smallHit_red loaded') }
-const smallHitWhite = new Image()
-smallHitWhite.src = '../../img/Effect_SmallHit_1_516x463_white.png'
-smallHitWhite.onload = function () { console.log('smallHit_white loaded') }
-const smlHitSprite = new Sprite({ image: smallHitBlue, x: 0, y: 0, frameCount: 29, startFrame: 2, looped: false, rotate: true, OffsetX: 13, width: 516, height: 463, rows: 7, cols: 9, drawnWidth: 89, drawnHeight: 80})
+preloadImage('explosion', '../../img/Effect_Explosion2_1_355x365.png')
+//const explosion = new Image()
+//explosion.src = '../../img/Effect_Explosion2_1_355x365.png'
+//explosion.onload = function () { console.log('Explosion loaded') }
+const explSprite = new Sprite({image: imageMap.get('explosion'), x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 120,drawnHeight: 124})
+preloadImage('smallHitBlue', '../../img/Effect_SmallHit_1_516x463_blue.png')
+//const smallHitBlue = new Image()
+//smallHitBlue.src = '../../img/Effect_SmallHit_1_516x463_blue.png'
+//smallHitBlue.onload = function () { console.log('smallHit_blue loaded') }
+preloadImage('smallHitGreen', '../../img/Effect_SmallHit_1_516x463_green.png')
+//const smallHitGreen = new Image()
+//smallHitGreen.src = '../../img/Effect_SmallHit_1_516x463_green.png'
+//smallHitGreen.onload = function () { console.log('smallHit_blue loaded') }
+preloadImage('smallHitYellow', '../../img/Effect_SmallHit_1_516x463_yellow.png')
+//const smallHitYellow = new Image()
+//smallHitYellow.src = '../../img/Effect_SmallHit_1_516x463_yellow.png'
+//smallHitYellow.onload = function () { console.log('smallHit_yellow loaded') }
+preloadImage('smallHitRed', '../../img/Effect_SmallHit_1_516x463_red.png')
+//const smallHitRed = new Image()
+//smallHitRed.src = '../../img/Effect_SmallHit_1_516x463_red.png'
+//smallHitRed.onload = function () { console.log('smallHit_red loaded') }
+preloadImage('smallHitWhite', '../../img/Effect_SmallHit_1_516x463_white.png')
+//const smallHitWhite = new Image()
+//smallHitWhite.src = '../../img/Effect_SmallHit_1_516x463_white.png'
+//smallHitWhite.onload = function () { console.log('smallHit_white loaded') }
+const smlHitSprite = new Sprite({ image: imageMap.get('smallHitBlue'), x: 0, y: 0, frameCount: 29, startFrame: 2, looped: false, rotate: true, OffsetX: 13, width: 516, height: 463, rows: 7, cols: 9, drawnWidth: 89, drawnHeight: 80})
 
 const impact = new Image()
 impact.src = '../../img/Effect_Impact_1_305x383.png'
@@ -144,4 +150,4 @@ tentacles.onload = function () { console.log('tenta loaded') }
 const tntSprite = new Sprite({ image: tentacles, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 433, height: 337, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
 
 const trlSprites = [pwrSprite, wrmSprite, tntSprite]
-const hitImages = [smallHitBlue, smallHitGreen, smallHitRed, smallHitYellow, smallHitWhite]
+const hitImages = ['smallHitBlue', 'smallHitGreen', 'smallHitRed', 'smallHitYellow', 'smallHitWhite']

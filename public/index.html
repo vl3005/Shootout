@@ -1,154 +1,45 @@
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Stick+No+Bills:wght@200..800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Bungee+Spice&family=Stick+No+Bills:wght@200..800&family=Zen+Dots&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Bungee+Spice&family=Stick+No+Bills:wght@200..800&display=swap" rel="stylesheet">
-  <style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redirecting</title>
+  <script>
+    window.onload = function () {
+      var width = 1920 * window.devicePixelRatio;
+      var height = 1080 * window.devicePixelRatio;
 
-    .stick-no-bills-big {
-      font-family: "Stick No Bills", sans-serif;
-      font-optical-sizing: auto;
-      font-weight: 600;
-      font-size: 20px;
-      font-style: normal;
-    }
-    .zen-dots-regular {
-      font-family: "Zen Dots", sans-serif;
-      font-weight: 400;
-      font-style: normal;
-    }
+      var newWindow = window.open('redirect.html', 'gameWindow', `toolbar=no,location=no,status=no,menubar=no,scrollbars=no,resizable=no,width=${width},height=${height}`);
+      function requestFullscreen() {
+        if (newWindow.document.documentElement.requestFullscreen) {
+          newWindow.document.documentElement.requestFullscreen();
+        } else if (newWindow.document.documentElement.mozRequestFullScreen) { // Firefox
+          newWindow.document.documentElement.mozRequestFullScreen();
+        } else if (newWindow.document.documentElement.webkitRequestFullscreen) { // Chrome, Safari and Opera
+          newWindow.document.documentElement.webkitRequestFullscreen();
+        } else if (newWindow.document.documentElement.msRequestFullscreen) { // IE/Edge
+          newWindow.document.documentElement.msRequestFullscreen();
+        }
+      }
 
-    .bungee-spice-regular {
-      font-family: "Bungee Spice", sans-serif;
-      font-weight: 400;
-      font-style: normal;
+      // Wait for the new window to load
+      newWindow.onload = function () {
+        requestFullscreen();
+      };
+      // Ensure that the new window is given time to open before closing the current window
+      setTimeout(function () {
+        if (window.location.href !== newWindow.location.href) {
+          window.close();
+        }
+      }, 1000); // Adjust the timeout duration as needed
     }
-
-    body {
-      font-family: "Stick No Bills", sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
-      margin: 0;
-      overflow: hidden;
-      background: #000000 /*#94a3b8*/;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      width: 100%;
-    }
-
-    input::placeholder {
-      color: #94a3b8;
-    }
-
-    .spec {
-      background-image: url('/img/Bg.png');
-      border: 8px solid;
-      background-size: 12%;
-      display: inline-block;
-      border-image-source: url('/img/metallicTexture.png');
-      border-image-slice: 45;
-      border-radius: 5px;
-      box-shadow: inset 0 0 4px 2px rgb(119 117 122), 0 0 20px 0px #969696;
-      box-sizing:content-box !important;
-      border-image-repeat: round;
-      overflow: hidden;
-      z-index: 2;
-      cursor: url('/img/crosshair2.png') 16 16, auto;
-    }
-
-    #bgCanvas {
-      position: absolute;
-      display: inline-block;
-      z-index: 0;
-    }
-
-  </style>
+  </script>
 </head>
-<body style=" display: flex; align-items: center; justify-content:center">
-  <canvas id="bgCanvas"></canvas>
-  <div style="display: inline-flex">
-    <div id="stats" style=" position: absolute;
-      color: white; padding: 3px 15px 3px 7px;
-      font: 'Stick No Bills';
-      display: none;
-      margin: 8px 0px 0px 8px;
-      font-family: sans-serif;
-      font-size: 14px;
-      user-select: none;
-      background: rgba(0,0,0,0.7);
-      border-radius: 15px 0px;
-      z-index:3">
-      <div style="margin-bottom: 3px" class="stick-no-bills-big">Leaderboard</div>
-      <div id="playerLabels"></div>
-    </div>
+<body align="center">
+  <h1>Redirecting to the game...</h1> <h3>This will be a future lobby/sign-in/register type page..</h3><h5>Maybe... If I feel like it.</h5>
 
-    <canvas id="mainCanvas" class="spec"></canvas>
-    <div style="
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: absolute;
-          top: 0;
-          right: 0;
-          bottom: 0;
-          left: 0;
-        ">
-      <form id="usernameForm" style="z-index: 2">
-        <div>
-          <input id="usernameInput" required
-                 maxlength="8"
-                 type="text"
-                 placeholder="Username (Max 8 characters)"
-                 style="
-                    width:250px;
-                    padding: 12px;
-                    border-radius: 20px;
-                    border: none;
-                    background: #475569;
-                    color: #cbd5e1;" />
-        </div>
-        <div style="text-align: center; margin-top: 8px">
-          <button type="submit" style="
-                padding: 8px 20px;
-                border-radius: 100px;
-                border: none;
-                background-image: linear-gradient(
-                  to right,
-                  rgb(6, 182, 212),
-                  rgb(59, 130, 246)
-                );
-                color: white;
-                cursor: pointer;
-              ">
-            Start!
-          </button>
-        </div>
-      </form>
-    </div>
-    <!-- username input end -->
-  </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js" integrity="sha512-xi/RZRIF/S0hJ+yJJYuZ5yk6/8pCiRlEXZzoguSMl+vk2i3m6UjUO/WcZ11blRL/O+rnj94JRGwt/CHbc9+6EA=="
-          crossorigin="anonymous"
-          referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.10.2/gsap.min.js"
-          integrity="sha512-kVlGhj2qFy+KBCFuvjBJTGUMxbdqJKs4yK2jh0e0VPhWUPiPC87bzm4THmaaIee3Oj7j6sDpTTgm2EPPiESqBg=="
-          crossorigin="anonymous"
-          referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="./js/classes/BgImage.js"></script>
-  <script src="./js/classes/Player.js"></script>
-  <script src="./js/classes/Sprite.js"></script>
-  <script src="./js/classes/Particle.js"></script>
-  <script src="./js/classes/Projectile.js"></script>
-  <script src="./js/Audio.js"></script>
-  <script src="./js/frontend.js"></script>
-  <script src="./js/eventListeners.js"></script>
+  <br /><br /><button onclick="location.reload()">Join again if disconnected</button>
+  <h5 style="color:white">HAHAHA STEALING ALL YOUR DATA!! YOU GOT HACKED!!<br /><br /><br />Just kidding.. relax, enjoy the game</h5>
 
 </body>
 </html>
