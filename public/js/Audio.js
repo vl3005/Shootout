@@ -16,7 +16,11 @@ window.sounds = {
     new Howl({ src: ['../audio/barrierHit2.wav'], volume: 0.3, html5PoolSize: 10, html5: true }),
     new Howl({ src: ['../audio/barrierHit3.wav'], volume: 0.3, html5PoolSize: 10, html5: true }),
     new Howl({ src: ['../audio/barrierHit4.wav'], volume: 0.3, html5PoolSize: 10, html5: true })
-  ], 
+  ],
+  physicalHits: [
+    new Howl({ src: ['../audio/playerHit1.wav'], volume: 0.4, html5PoolSize: 10, html5: true }),
+    new Howl({ src: ['../audio/playerHit2.wav'], volume: 0.4, html5PoolSize: 10, html5: true }),
+  ],
   lowEnergy: new Howl({
     src: ['../audio/cantShoot.wav'],
     volume: 0.8,
@@ -49,7 +53,7 @@ window.sounds = {
     loop: false,
     html5: true
   }),
-  noShield: new Howl({
+  alarm: new Howl({
     src: ['../audio/noShield.wav'],
     volume: 0.8,
     loop: true,

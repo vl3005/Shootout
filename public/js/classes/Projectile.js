@@ -6,13 +6,9 @@ class Projectile {
     this.radius = radius
     this.craft = craft
     this.color = color
-    this.strokeColor = this.invertHexColor(this.color)
     this.velocity = velocity
     this.speed = speed
     this.angle = angle
-    //this.splashSprite = smlHitSprite.clone()
-    //this.splashSprite.image = imageMap.get(hitImages[this.craft.hitType])
-    this.bAngle = 0;
     this.hasRicocheted = false
     this.distanceTraveled = 0;    
     this.maxDistance = window.canvasDiag*0.92;
@@ -24,43 +20,14 @@ class Projectile {
     this.isSpent = false;
     this.opacity = 1
   }
-
-  invertColor(r, g, b) {
-    return {
-      r: 255 - r,
-      g: 255 - g,
-      b: 255 - b
-    };
-  }
-
-  hexToRgb(hex) {
-    const bigint = parseInt(hex.slice(1), 16);
-    return {
-      r: (bigint >> 16) & 255,
-      g: (bigint >> 8) & 255,
-      b: bigint & 255
-    };
-  }
-
-  rgbToHex(r, g, b) {
-    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-  }
-
-  invertHexColor(hex) {
-    const { r, g, b } = this.hexToRgb(hex);
-    const invertedColor = this.invertColor(r, g, b);
-    return this.rgbToHex(invertedColor.r, invertedColor.g, invertedColor.b);
-  }
-
+   
   draw() {
     c.save()
     c.beginPath()
     c.arc(this.x - Math.cos(this.angle) * 3, this.y - Math.sin(this.angle) * 3, this.radius*0.8, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.sColor   
     c.fill()
-    c.fillStyle = this.gradient
     c.closePath()
-    c.fill()
     c.beginPath()
     c.shadowBlur = 4 + 2 * this.distanceRatio
     c.shadowColor = this.craft.sColor
@@ -74,16 +41,12 @@ class Projectile {
     c.arc(this.x - Math.cos(this.angle) * 6, this.y - Math.sin(this.angle) * 6, this.radius*0.5, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.sColor   
     c.fill()
-    c.fillStyle = this.gradient
     c.closePath()
-    c.fill()
     c.beginPath()
     c.arc(this.x - Math.cos(this.angle) * 8, this.y - Math.sin(this.angle) * 8, this.radius*0.3, 0, Math.PI * 2, false)
     c.fillStyle = this.craft.sColor   
     c.fill()
-    c.fillStyle = this.gradient
     c.closePath()
-    c.fill()
     c.restore()
     
   }
@@ -106,16 +69,16 @@ class Projectile {
 
   update() {
     this.gradient = c.createRadialGradient(
-      this.x + (this.radius) * Math.cos(this.bAngle),
-      this.y + (this.radius) * Math.sin(this.bAngle), this.radius,
-      this.x + (2 * this.radius) * Math.cos(this.bAngle),
-      this.y + (2 * this.radius) * Math.sin(this.bAngle), 1.5* this.radius)
-    this.gradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Shine effect at the start
-    this.gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)'); // Shine effect at the start
-    this.gradient.addColorStop(0.8, this.craft.mColor);               // Your color in the middle
-    this.gradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // Slightly darker at the end
-    this.gradient.addColorStop(0.92, 'rgba(32, 33, 33, 0.2)');                 // Slightly darker at the end
-    this.gradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');  
+      this.x + (this.radius+3) * Math.cos(this.angle),
+      this.y + (this.radius+3) * Math.sin(this.angle), 0.6*this.radius,
+      this.x + (this.radius) * Math.cos(this.angle),
+      this.y + (this.radius) * Math.sin(this.angle), 1.8*this.radius)
+    this.gradient.addColorStop(0, `${this.craft.sColor}FF`); // Shine effect at the start
+    this.gradient.addColorStop(0.15, `${this.craft.sColor}CF`); // Shine effect at the start
+    this.gradient.addColorStop(0.89, this.craft.mColor);               // Your color in the middle
+    this.gradient.addColorStop(0.9, 'rgba(32, 33, 33, 0.1)');                 // Slightly darker at the end
+    this.gradient.addColorStop(0.95, 'rgba(32, 33, 33, 0.2)');                 // Slightly darker at the end
+    this.gradient.addColorStop(1, 'rgba(32, 33, 33, 0.4)');  
     if (!this.isSpent) {
     this.distanceTraveled += this.speed
     this.distanceRatio = Math.min(1,this.distanceTraveled/this.maxDistance)
@@ -127,12 +90,6 @@ class Projectile {
         SOCKET.emit('spentProjectile', { id })
       }
     }
-    //this.trail.x = this.x
-    //this.trail.y = this.y
-    //if (this.hasRicocheted) {      
-    //  this.hasRicocheted = false
-    //  this.angle = Math.atan2(this.velocity.y, this.velocity.x)
-    //}
     this.draw()
   }
   

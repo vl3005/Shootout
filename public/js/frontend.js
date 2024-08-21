@@ -8,11 +8,18 @@ bCanvas.height = 3072//Math.floor(3072 / scale)
 const distanceFromBg = 350
 
 console.log(scale)
-c.save()
-canvas.width = 1600 / scale
-canvas.height = canvas.width * 9 / 16
-c.restore()
 
+const logicalWidth = 1280
+const logicalHeight = logicalWidth * 9 / 16 
+
+canvas.width = logicalWidth
+canvas.height = logicalHeight
+
+if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+  console.log('Web Audio API is supported and enabled.');
+} else {
+  console.log('Web Audio API is not supported or may be disabled.');
+}
 
 
 let gl, program, positionBuffer, texCoordBuffer, positionLocation, texture;
@@ -203,7 +210,7 @@ const FENDPLAYERS = {}
 const FENDPROJECTILES = {}
 const FENDPARTICLES = {}
 const MOUSEPOSITION = {x:0,y:0}
-const ENERGYCOSTS = {shoot:8,move:0.01}
+const ENERGYCOSTS = {shoot:6,move:0.01}
 let PLAYERSPEED = { x: 0, y: 0 }
 const PROJ_SPEED = 30
 const TOPSPEED = 7.2
@@ -237,8 +244,8 @@ const calcAimData = () => {
     y: FENDPLAYERS[SOCKET.id].y
   }
   angle = Math.atan2(
-    MOUSEPOSITION.y - top - playerPosition.y,
-    MOUSEPOSITION.x - left - playerPosition.x
+    MOUSEPOSITION.y - top -8- Math.round(playerPosition.y),
+    MOUSEPOSITION.x - left -8- Math.round(playerPosition.x)
   )
   angle = (angle + 2 * Math.PI) % (2 * Math.PI)
   FENDPLAYERS[SOCKET.id].angleCos = Math.cos(angle)
@@ -307,7 +314,7 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
       FENDPROJECTILES[id].velocity = backEndProjectile.velocity
       FENDPROJECTILES[id].hasRicocheted = backEndProjectile.hasRicocheted
       FENDPROJECTILES[id].ricochetPens = backEndProjectile.ricochetPens
-      if (FENDPROJECTILES[id].hasRicocheted) sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
+      //if (FENDPROJECTILES[id].hasRicocheted) sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
 
       let spriteX = FENDPROJECTILES[id].x + (rand1 - 0.5) * 8, spriteY = FENDPROJECTILES[id].y + (rand2 - 0.5) * 8;
       
@@ -318,6 +325,7 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
         case 'right': spriteX = canvas.width; spriteY = FENDPROJECTILES[id].y; break
       }
       if (backEndProjectile.isDead) {        
+        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
         actSprID = check3Big(actSprID, ACTIVE_SPRITES)
         sprToPush = FENDPLAYERS[shooterId].splashSprite.clone()
         sprToPush.resetSprite(spriteX, spriteY, rand1 * 2 * Math.PI)
@@ -327,7 +335,8 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
         ACTIVE_SPRITES[actSprID] = sprToPush        
         delete FENDPROJECTILES[id]
         }
-      else if(side){        
+      else if (side) {        
+        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
         actSprID = check3Big(actSprID, ACTIVE_SPRITES)
         sprToPush = impSprite.clone()
         sprToPush.resetSprite(spriteX, spriteY, rand1*2*Math.PI)
@@ -340,11 +349,24 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
   
 })
 
-SOCKET.on('playerHitBarrier', (side) => {
-  if(!sounds.ouch.playing())
-    sounds.ouch.play()
-  FENDPLAYERS[SOCKET.id].newEnergy *= 0.995
+SOCKET.on('playerHitSomething', ({ side, amount, rand}) => {
+ 
   FENDPLAYERS[SOCKET.id].stuck = true
+  if (!side) {
+    sounds.physicalHits[Math.round(rand * (sounds.physicalHits.length - 1))].play()
+    if (FENDPLAYERS[SOCKET.id].shield > 0) {
+      FENDPLAYERS[SOCKET.id].shield = Math.max(FENDPLAYERS[SOCKET.id].shield - amount, 0)
+      startShieldReplinsh(SOCKET.id)
+    }
+    else {
+      if (!FENDPLAYERS[SOCKET.id].isRespawning) FENDPLAYERS[SOCKET.id].newEnergy -= amount
+      startEnergyReplenish(1400)
+    }
+  } else {
+    if (!sounds.ouch.playing())
+      sounds.ouch.play()  
+    if (!FENDPLAYERS[SOCKET.id].isRespawning) FENDPLAYERS[SOCKET.id].newEnergy -= amount
+  }
   
 
 })
@@ -446,7 +468,7 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
       
         if (id === SOCKET.id) {
           if (FENDPLAYERS[SOCKET.id].isDead)
-            sounds.noShield.stop(alarm[SOCKET.id])          
+            sounds.alarm.stop(alarm[SOCKET.id])          
           const lastBackendInputIndex = PLAYERINPUTS.findIndex(input => {            
             return backEndPlayer.sequenceNumber === input.sequenceNumber
           })
@@ -466,7 +488,7 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
           FENDPLAYERS[id].aimAngle = backEndPlayer.aimAngle
           FENDPLAYERS[id].moveAngle = backEndPlayer.moveAngle
           FENDPLAYERS[id].x = backEndPlayer.x
-          FENDPLAYERS[id].y = backEndPlayer.y
+          FENDPLAYERS[id].y = backEndPlayer.y          
         }
       }
   }
@@ -490,10 +512,8 @@ SOCKET.on('updateShieldInt', ({shield, playerId, isReplenishing }) => {
   FENDPLAYERS[playerId].shieldReplenish = isReplenishing  
 })
 
-SOCKET.on('updateParticles', ({ backEndParticles, randomI = -1 }) => {
-  if (randomI >= 0) {
-    sounds.barrierHits[Math.round(randomI * (sounds.barrierHits.length - 1))].play()
-  }
+SOCKET.on('updateParticles', ({ backEndParticles }) => {
+  
   for(particle in backEndParticles) {
     id = backEndParticles[particle].particleId
     if (FENDPARTICLES[id]) continue
@@ -503,6 +523,7 @@ SOCKET.on('updateParticles', ({ backEndParticles, randomI = -1 }) => {
       radius: backEndParticles[id].radius,
       velocity: backEndParticles[id].velocity,
       color: backEndParticles[id].color,
+      rand: backEndParticles[id].rand,
       alpha: 1
     })
   }
@@ -514,18 +535,55 @@ let alarm = {}
 SOCKET.on('untangle', ({ id1, id2, randY }) => {
   actSprID = check3Big(actSprID, ACTIVE_SPRITES)
   sprToPush = vrtxSprite.clone()
-  sprToPush.resetSprite(120, randY)
+  sprToPush.resetSprite(60, randY)
   ACTIVE_SPRITES[actSprID] = sprToPush
   actSprID = check3Big(actSprID, ACTIVE_SPRITES)
   sprToPush = vrtxSprite.clone()
-  sprToPush.resetSprite(canvas.width - 120, canvas.height - randY)
+  sprToPush.resetSprite(canvas.width - 60, canvas.height - randY)
   ACTIVE_SPRITES[actSprID] = sprToPush
   sounds.vortex.play()
-  FENDPLAYERS[id1].x = 120
-  FENDPLAYERS[id2].x = canvas.width - 120
+  FENDPLAYERS[id1].x = 60
+  FENDPLAYERS[id2].x = canvas.width - 60
   FENDPLAYERS[id1].y = randY
   FENDPLAYERS[id2].y = canvas.height - randY
 })
+function startEnergyReplenish(waitTime) {
+  if (thisPlayer.isRespawning) {
+    console.log('RESPAWNING SO NO SHIT')
+    return
+  }
+
+  clearInterval(thisPlayer.energyReplenish)
+  thisPlayer.energyReplenish = null
+  clearTimeout(energyRepBuffer)
+  energyRepBuffer = setTimeout(() => {
+    if (!thisPlayer.isDead && !thisPlayer.energyReplenish)
+      thisPlayer.energyReplenish = setInterval(() => {
+        thisPlayer.replenishEnergy()
+        if (thisPlayer.newEnergy>=ENERGYCOSTS.shoot) thisPlayer.canReload = true
+        thisPlayer.socket.emit('updateEnergy', ({ newEnergy: thisPlayer.newEnergy, energy: thisPlayer.energy }))
+      }, 60)
+    energyRepBuffer = null
+  }, waitTime)
+}
+function startShieldReplinsh(playerId) {
+  SOCKET.emit('updateShield', ({ shield: FENDPLAYERS[playerId].shield, playerId, isReplenishing: null }))
+  clearTimeout(FENDPLAYERS[playerId].replenishBuffer)
+  clearInterval(FENDPLAYERS[playerId].shieldReplenish)
+  FENDPLAYERS[playerId].shieldReplenish = null
+  FENDPLAYERS[playerId].replenishBuffer = null
+  FENDPLAYERS[playerId].replenishBuffer = setTimeout(() => {
+    sounds.shieldUp.play()
+    FENDPLAYERS[playerId].shieldReplenish = setInterval(() => {
+      if (FENDPLAYERS[playerId].shield > 20) sounds.alarm.pause(alarm[playerId])
+      FENDPLAYERS[playerId].replenishShield()
+      SOCKET.emit('updateShield', ({ shield: FENDPLAYERS[playerId].shield, playerId, isReplenishing: FENDPLAYERS[playerId].shieldReplenish }))
+
+    }, 12)
+  }, 4200)
+  if (FENDPLAYERS[playerId].shield <= 15 && !sounds.alarm.playing(alarm[playerId]))
+    alarm[playerId] = sounds.alarm.play()
+}
 
 SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
   sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
@@ -585,37 +643,21 @@ SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
       tl.play();
   }
   if (SOCKET.id == shooterId) {
-    FENDPLAYERS[shooterId].newEnergy += (1 - FENDPROJECTILES[projId].distanceRatio) * 0.8 * ENERGYCOSTS.shoot
+    FENDPLAYERS[shooterId].newEnergy += (1 - FENDPROJECTILES[projId].distanceRatio) * 1/3 * ENERGYCOSTS.shoot
     SOCKET.emit('updateEnergy', ({newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy}))
 
   }
-  if (SOCKET.id == playerId) {
-  SOCKET.emit('updateShield', ({ shield: FENDPLAYERS[playerId].shield, playerId, isReplenishing: null }))
-  clearTimeout(FENDPLAYERS[playerId].replenishBuffer)
-  clearInterval(FENDPLAYERS[playerId].shieldReplenish)
-  FENDPLAYERS[playerId].shieldReplenish = null
-  FENDPLAYERS[playerId].replenishBuffer = null
-    FENDPLAYERS[playerId].replenishBuffer = setTimeout(() => {
-      sounds.shieldUp.play()
-      FENDPLAYERS[playerId].shieldReplenish = setInterval(() => {
-        if (FENDPLAYERS[playerId].shield > 20) sounds.noShield.pause(alarm[playerId])
-        FENDPLAYERS[playerId].replenishShield()
-        SOCKET.emit('updateShield', ({ shield: FENDPLAYERS[playerId].shield, playerId, isReplenishing: FENDPLAYERS[playerId].shieldReplenish }))        
-
-      }, 12)
-    }, 4200)
-    if (FENDPLAYERS[playerId].shield <= 15 && !sounds.noShield.playing(alarm[playerId]))
-      alarm[playerId] = sounds.noShield.play()
-  }
+  if (SOCKET.id == playerId)  startShieldReplinsh(playerId)
 }) 
 
 SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
 
   if (FENDPLAYERS[dyingPlayerId]) {
+    
     actSprID = check3Big(actSprID, ACTIVE_SPRITES)
     sprToPush = explSprite.clone()
     sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y,rand1*2*Math.PI)
-    ACTIVE_SPRITES[actSprID] = sprToPush   
+    ACTIVE_SPRITES[actSprID] = sprToPush
     FENDPLAYERS[dyingPlayerId].isDead = true
     dyingPlayer = FENDPLAYERS[dyingPlayerId]
     sounds.die.play()    
@@ -632,6 +674,10 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
       FENDPLAYERS[dyingPlayerId].shieldReplenish = null
       clearTimeout(FENDPLAYERS[dyingPlayerId].replenishBuffer)
       FENDPLAYERS[dyingPlayerId].replenishBuffer = null
+      if (FENDPLAYERS[dyingPlayerId].x < 60) FENDPLAYERS[dyingPlayerId].x = 60
+      else if (FENDPLAYERS[dyingPlayerId].x > canvas.width - 60) FENDPLAYERS[dyingPlayerId].x = canvas.width - 60
+      if (FENDPLAYERS[dyingPlayerId].y < 60) FENDPLAYERS[dyingPlayerId].y = 60
+      else if (FENDPLAYERS[dyingPlayerId].y > canvas.height - 60) FENDPLAYERS[dyingPlayerId].y = canvas.height - 60
     }
 
     setTimeout(() => {
@@ -642,6 +688,7 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
       FENDPLAYERS[dyingPlayerId].isRespawning = true
       FENDPLAYERS[dyingPlayerId].isDead = false
       FENDPLAYERS[dyingPlayerId].text = FENDPLAYERS[dyingPlayerId].username
+      
       actSprID = check3Big(actSprID, ACTIVE_SPRITES)
       sprToPush = vrtxSprite.clone()
       sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y)
@@ -656,6 +703,7 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
       }, 1)
       FENDPLAYERS[dyingPlayerId].energyReplenish = setInterval(() => {        
         FENDPLAYERS[dyingPlayerId].replenishEnergy()
+        SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
       }, 10)}
       gsap.to(FENDPLAYERS[dyingPlayerId], {
         duration: 0.202,  // Duration of each fade in/out
@@ -698,15 +746,10 @@ function animate() {
   updateTextureCoordinates()
 
   drawBackground()
-
+  c.save()
   c.clearRect(0, 0, canvas.width, canvas.height)
-  calcAimData()
-  if (Object.keys(FENDPROJECTILES).length !== 0) {  
-    for (const id in FENDPROJECTILES) {
-      FENDPROJECTILES[id].bAngle = bAngle + Math.PI;
-      FENDPROJECTILES[id].update();
-    }
-  }
+  calcAimData()  
+  
 
   for (const id in FENDPLAYERS) {
     const frontEndPlayer = FENDPLAYERS[id]
@@ -721,14 +764,15 @@ function animate() {
       if (decel.y) FENDPLAYERS[id].y +=
         (FENDPLAYERS[id].target.y - FENDPLAYERS[id].y) * 0.5
     }
-    c.save()            
-    if (!frontEndPlayer.isDead) {
+    
       FENDPLAYERS[id].bAngle = Math.atan2(normalizedCenterY - FENDPLAYERS[id].y, normalizedCenterX - FENDPLAYERS[id].x)
+      FENDPLAYERS[id].shieldAngle += 0.004 + 0.12*(1-FENDPLAYERS[id].shield/100)
+      FENDPLAYERS[id].shieldAngle %= 2*Math.PI 
       let distFromNova = Math.hypot(normalizedCenterY - FENDPLAYERS[id].y, normalizedCenterX - FENDPLAYERS[id].x)
       let lightStrength = 1 - Math.min(1450, distFromNova) / 1450
       FENDPLAYERS[id].projSpinAngle = 4000*bAngle
-      FENDPLAYERS[id].gradient = c.createRadialGradient(FENDPLAYERS[id].x + (FENDPLAYERS[id].radius + 10.5) * Math.cos(FENDPLAYERS[id].bAngle),
-        FENDPLAYERS[id].y + (FENDPLAYERS[id].radius + 10.5) * Math.sin(FENDPLAYERS[id].bAngle), 8 + 7*lightStrength,
+      FENDPLAYERS[id].gradient = c.createRadialGradient(FENDPLAYERS[id].x + (FENDPLAYERS[id].radius + 9) * Math.cos(FENDPLAYERS[id].bAngle),
+        FENDPLAYERS[id].y + (FENDPLAYERS[id].radius + 9) * Math.sin(FENDPLAYERS[id].bAngle), 6 + 9*lightStrength,
         FENDPLAYERS[id].x + (FENDPLAYERS[id].radius + 15) * Math.cos(FENDPLAYERS[id].bAngle),
         FENDPLAYERS[id].y + (FENDPLAYERS[id].radius + 15) * Math.sin(FENDPLAYERS[id].bAngle), 28 + 5*lightStrength)
       FENDPLAYERS[id].gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');                   // Creating the gradient effect for lighting
@@ -743,12 +787,13 @@ function animate() {
       frontEndPlayer.drawEnergyWidget()           
       frontEndPlayer.drawCannon()            
       frontEndPlayer.drawShield()      
-      if (id === SOCKET.id) frontEndPlayer.drawStats()
-    }
+      if (id === SOCKET.id) {
+        frontEndPlayer.drawStats()
+      }
     frontEndPlayer.drawText()
-
-    c.restore()
+    
   }  
+  c.restore()
 
   for (const id in ACTIVE_SPRITES) {    
     ACTIVE_SPRITES[id].draw()
@@ -756,7 +801,12 @@ function animate() {
       delete ACTIVE_SPRITES[id];
     }
   }
-  
+  if (Object.keys(FENDPROJECTILES).length !== 0) {
+    for (const id in FENDPROJECTILES) {
+      //FENDPROJECTILES[id].bAngle = bAngle * 6000;
+      FENDPROJECTILES[id].update();
+    }
+  }
   let flag = false //flag to check if to update backEndParticles to delete the dead ones
   for (const id in FENDPARTICLES) {    
     const frontEndParticle = FENDPARTICLES[id]
@@ -764,8 +814,9 @@ function animate() {
     if (frontEndParticle.alpha <= 0) {
       delete FENDPARTICLES[id]     
         flag = true        
-    }
+    }    
   }  
+  //console.log(FENDPARTICLES[Object.keys(FENDPARTICLES)[Object.keys(FENDPARTICLES).length - 1]]);
 
   if (flag) SOCKET.emit('updateBackEndParticles', FENDPARTICLES)        
 
@@ -793,7 +844,7 @@ function formatDate(date) {
   return `${day}/${month}/${year} - ${hours}:${minutes}:${seconds}.${milliseconds}`;
 }
 
-// This interval essentially acts as a double to the movement event listener, calculates new positions to be sent to the server
+// This interval essentially acts as a double to the keydown event listener, calculates new positions to be sent to the server
 
 setInterval(() => {
   if (FENDPLAYERS[SOCKET.id]) {    
@@ -808,12 +859,15 @@ setInterval(() => {
         else if (Object.values(KEYS).filter(key => key.pressed === true).length > 2) {
           for (const key in KEYS) key.pressed = false
         }
+        if(!thisPlayer.isRespawning)
+        {
+          console.log('here')
+          if (FENDPLAYERS[SOCKET.id].newEnergy > 0) {
+            FENDPLAYERS[SOCKET.id].newEnergy -= ENERGYCOSTS.move
 
-        if (FENDPLAYERS[SOCKET.id].newEnergy > 0) {
-          FENDPLAYERS[SOCKET.id].newEnergy -= ENERGYCOSTS.move
-
-        } else FENDPLAYERS[SOCKET.id].newEnergy = 0
-        SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
+          } else FENDPLAYERS[SOCKET.id].newEnergy = 0
+          SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
+        }
         
         if (!FENDPLAYERS[SOCKET.id].stuck) {
           //     Going up W
@@ -875,7 +929,7 @@ setInterval(() => {
           FENDPLAYERS[SOCKET.id].thrusterOutput = Math.hypot(PLAYERSPEED.x, PLAYERSPEED.y)
         } else // if STUCK
         {
-
+          FENDPLAYERS[SOCKET.id].thrusterOutput = 0
         }
       }
       else {

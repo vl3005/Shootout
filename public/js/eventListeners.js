@@ -1,7 +1,7 @@
 let keyHeld = false
 let moveCrosshair = false
 let moveTimeout
-let RELOADTIME = 200
+let RELOADTIME = 150
 let justClicked = false
 
 let playerPosition
@@ -10,11 +10,11 @@ let startTime = 0
 
 document.addEventListener('keydown', (event) => {
   if (!thisPlayer || thisPlayer.isDead) return
-  if (keyHeld) {
-    const endTime = Date.now()
-    result = endTime - startTime
-    console.log(`Keydown event waited ${result < 100 ? result : 'resetting'}`)
-  }
+  //if (keyHeld) {
+  //  const endTime = Date.now()       /* TIMER TO MEASURE TRIGGER TIME */
+  //  result = endTime - startTime
+  //  console.log(`Keydown event waited ${result < 100 ? result : 'resetting'}`)
+  //}
   switch (event.code) {
     // TODO: Add a syphon effect
     case 'KeyM':
@@ -61,18 +61,19 @@ document.addEventListener('keydown', (event) => {
       default:
           return
   }  
-  if (keyHeld) {
+  if (keyHeld && !thisPlayer.isRespawning) {
     clearInterval(thisPlayer.energyReplenish)
     thisPlayer.energyReplenish = null
     
     if (!sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
       MOVESOUND[thisPlayer.socket.id] = sounds.move.volume(0).play('main')
       sounds.move.once('play', () => {
-        sounds.move.fade(0, 0.25, 250, MOVESOUND[thisPlayer.socket.id]);
+        sounds.move.rate(0.8, MOVESOUND[thisPlayer.socket.id])
+        sounds.move.fade(0, 0.4, 250, MOVESOUND[thisPlayer.socket.id]);
       }, MOVESOUND[thisPlayer.socket.id]);
     }
   }
-  startTime = Date.now()
+  //startTime = Date.now()
 })
 
 
@@ -112,11 +113,11 @@ document.addEventListener('keyup', (event) => {
     KEYS.a.pressed == false &&
     KEYS.s.pressed == false &&
     KEYS.d.pressed == false) {
-    if (!thisPlayer.newEnergy > 0)  // If player's energy drops below zero from movement spending, bring it back to 0
+    if (!thisPlayer.newEnergy > 0 && !thisPlayer.isRespawning)  // If player's energy drops below zero from movement spending, bring it back to 0
       thisPlayer.newEnergy = 0
 
     if (sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
-      sounds.move.fade(0.25, 0.0, 250, MOVESOUND[thisPlayer.socket.id])
+      sounds.move.fade(0.4, 0.0, 250, MOVESOUND[thisPlayer.socket.id])
         .once('fade', () => {
           sounds.move.stop(MOVESOUND[thisPlayer.socket.id]);
         });
@@ -125,13 +126,7 @@ document.addEventListener('keyup', (event) => {
     thisPlayer.moveAngle += Math.PI
     thisPlayer.moveAngle %= 2*Math.PI    
     if (thisPlayer.energyReplenish == null && energyRepBuffer == null) {
-      energyRepBuffer = setTimeout(() => { 
-      thisPlayer.energyReplenish = setInterval(() => {
-        thisPlayer.replenishEnergy()
-        thisPlayer.socket.emit('updateEnergy', ({newEnergy:thisPlayer.newEnergy, energy:thisPlayer.energy})) 
-      }, 60)        
-        energyRepBuffer = null
-      },900)
+      startEnergyReplenish(900)
     }
     
     
@@ -151,38 +146,22 @@ function sleep(ms) {
 }
 
 async function emitShoot() {
-  if (thisPlayer.energy < ENERGYCOSTS.shoot)
+  if (thisPlayer.newEnergy < ENERGYCOSTS.shoot)
     sounds.lowEnergy.play()
-  while (holdFireButton && thisPlayer.newEnergy >= ENERGYCOSTS.shoot && !thisPlayer.isDead) {
+  while (holdFireButton && !thisPlayer.isDead && thisPlayer.canReload) {
     justClicked = true
+    thisPlayer.cannonLoaded = false
     clearInterval(thisPlayer.reloadInt)
     thisPlayer.cannonRadius = 0
-    if (!thisPlayer.isRespawning) {
-      clearInterval(thisPlayer.energyReplenish)
-      thisPlayer.energyReplenish = null
-      clearTimeout(energyRepBuffer)
-      thisPlayer.newEnergy -= ENERGYCOSTS.shoot
-      thisPlayer.socket.emit('updateEnergy', ({ newEnergy: thisPlayer.newEnergy, energy: thisPlayer.energy })) 
-    }
-    thisPlayer.reload(RELOADTIME, ENERGYCOSTS.shoot)
-    if (thisPlayer.newEnergy < ENERGYCOSTS.shoot)
-      sounds.gunDead.play()
-    energyRepBuffer = setTimeout(() => {
-      if (!thisPlayer.isDead && !thisPlayer.energyReplenish)
-        thisPlayer.energyReplenish = setInterval(() => {
-          thisPlayer.replenishEnergy()
-          thisPlayer.socket.emit('updateEnergy', ({ newEnergy: thisPlayer.newEnergy, energy: thisPlayer.energy })) 
-        }, 60)
-      energyRepBuffer = null
-    }, 1900)
     SOCKET.emit('shoot', {
-      x: playerPosition.x,
-      y: playerPosition.y,
+      x: thisPlayer.cannonX,
+      y: thisPlayer.cannonY,
       angle: thisPlayer.aimAngle,
       PROJ_SPEED
     })
-
-    await sleep(RELOADTIME)
+    thisPlayer.reload(RELOADTIME, ENERGYCOSTS.shoot)
+    startEnergyReplenish(1900)
+    await sleep(RELOADTIME*116/100)    
     justClicked = false
   }
 

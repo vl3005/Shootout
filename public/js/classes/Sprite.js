@@ -100,7 +100,7 @@ preloadImage('explosion', '../../img/Effect_Explosion2_1_355x365.png')
 //const explosion = new Image()
 //explosion.src = '../../img/Effect_Explosion2_1_355x365.png'
 //explosion.onload = function () { console.log('Explosion loaded') }
-const explSprite = new Sprite({image: imageMap.get('explosion'), x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 120,drawnHeight: 124})
+const explSprite = new Sprite({image: imageMap.get('explosion'), x:0, y:0, frameCount:54, startFrame:2,looped: false, rotate:true,width: 355,height: 365,rows: 6,cols: 9,drawnWidth: 145,drawnHeight: 149})
 preloadImage('smallHitBlue', '../../img/Effect_SmallHit_1_516x463_blue.png')
 //const smallHitBlue = new Image()
 //smallHitBlue.src = '../../img/Effect_SmallHit_1_516x463_blue.png'

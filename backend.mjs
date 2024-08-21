@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
+app.get('/*', (req, res) => {
   console.log('get function');
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
@@ -56,14 +56,11 @@ const activeDecInts = {}
 let backEndPlayer;
 let canvas = {}
 let backEndRespawnTime;
-const radius = 12.5
-const PROJECTILE_RADIUS = 3.2
+const PROJECTILE_RADIUS = 4
 let projectileId = 0
 let particleId = 0
 let dV;
-let velFacX;
 let newBAngle=Math.random() * 2*Math.PI;
-let velFacY;
 
 function check2Big(num) {
   if (num == Number.MAX_SAFE_INTEGER) {
@@ -75,10 +72,11 @@ function check2Big(num) {
   }
 }
 function checkCollision(playerA, playerB) {
-  const dx = playerA.x - playerB.x; // Difference in X coordinates
-  const dy = playerA.y - playerB.y; // Difference in Y coordinates
-  const distance = Math.hypot(dx, dy); // Euclidean distance
-  return distance < (2*playerA.radius+12); // Collision if distance < sum of radii
+  const dx = playerA.x - playerB.x; 
+  const dy = playerA.y - playerB.y; 
+  const distance = Math.hypot(dx, dy); 
+  const factor = playerA.shield * playerB.shield/10000 * 30
+  return distance < (2*playerA.radius+factor); // Collision if distance < sum of radii
 }
 function siftArray(arr, property) {
   return arr
@@ -101,6 +99,12 @@ io.on('connection', (SOCKET) => {
     console.log(`${formatDate(new Date(Date.now())) } - Disconnect event triggered for socket: ${SOCKET.id}, because ${reason}`);
 
     try {
+      for (const id in backEndProjectiles)
+        if (backEndProjectiles[id].playerId === SOCKET.id) {
+          backEndProjectiles[id].isDead = true
+          io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
+          delete backEndProjectiles[id]          
+        }
       crafts[backEndPlayers[SOCKET.id].chosenCraftIndex].inUse = false
       
       console.log(`${formatDate(new Date(Date.now()))} - Got the craft back ${backEndPlayers[SOCKET.id].craft.name} ${crafts}`);
@@ -111,7 +115,7 @@ io.on('connection', (SOCKET) => {
     playerSocketIDs.delete(SOCKET.id)
     socketIDArray = Array.from(playerSocketIDs.keys())
     delete backEndPlayers[SOCKET.id];
-    console.log(playerSocketIDs)
+    console.log(Object.keys(playerSocketIDs))
   });
 
   io.emit('updatePlayers', backEndPlayers)
@@ -294,34 +298,29 @@ io.on('connection', (SOCKET) => {
     }
 
     if (playerSides.left <= 0) {
-      //backEndPlayers[SOCKET.id].x = backEndPlayer.radius + 1
       backEndPlayers[SOCKET.id].stuck = true
-      SOCKET.emit('playerHitBarrier', 'left')
+      SOCKET.emit('playerHitSomething', ({ side: 'left', amount: 1, rand: Math.random() }))
       setTimeout(() => {
         backEndPlayers[SOCKET.id].stuck = false
       }, 300)
-      console.log(Math.sign(backEndPlayers[SOCKET.id].playerSpeed.x))
     } else
       if (playerSides.right >= canvas.width) {
-        //backEndPlayers[SOCKET.id].x = canvas.width - backEndPlayer.radius -1
         backEndPlayers[SOCKET.id].stuck = true
-        SOCKET.emit('playerHitBarrier', 'right')
+        SOCKET.emit('playerHitSomething', ({ side: 'right', amount: 1, rand: Math.random() }))
         setTimeout(() => {
           backEndPlayers[SOCKET.id].stuck = false
         }, 300)
       }
     if (playerSides.top <= 0) {
-      //backEndPlayers[SOCKET.id].y = backEndPlayer.radius +1
       backEndPlayers[SOCKET.id].stuck = true
-      SOCKET.emit('playerHitBarrier','top')
+      SOCKET.emit('playerHitSomething', ({ side: 'top', amount: 1, rand: Math.random() }))
       setTimeout(() => {
         backEndPlayers[SOCKET.id].stuck = false
       }, 300)
     } else    
     if (playerSides.bottom >= canvas.height) {
-      //backEndPlayers[SOCKET.id].y = canvas.height - backEndPlayer.radius -1
       backEndPlayers[SOCKET.id].stuck = true
-      SOCKET.emit('playerHitBarrier','bottom')
+      SOCKET.emit('playerHitSomething', ({ side: 'bottom', amount: 1, rand: Math.random() }))
       setTimeout(() => {
         backEndPlayers[SOCKET.id].stuck = false
       }, 300)
@@ -380,28 +379,28 @@ function checkBarrierSide(id, side) {
     case 2:
       if (backEndPlayers[id].y - backEndPlayers[id].radius <= 0) {
         backEndPlayers[id].y = backEndPlayers[id].radius + 1
-        return true
+        return 'top'
       }
       else return false
       break
     case -2:
       if (backEndPlayers[id].y + backEndPlayers[id].radius >= canvas.height) {
         backEndPlayers[id].y = canvas.height - backEndPlayers[id].radius - 1
-        return true
+        return 'bottom'
       }
       else return false
       break
     case 1:
       if (backEndPlayers[id].x - backEndPlayers[id].radius <= 0) {
         backEndPlayers[id].x = backEndPlayers[id].radius + 1
-        return true
+        return 'left'
       }
       else return false
       break
     case -1:
       if (backEndPlayers[id].x + backEndPlayers[id].radius >= canvas.width) {
         backEndPlayers[id].x = canvas.width - backEndPlayers[id].radius - 1
-        return true
+        return 'right'
       }
       else return false
       break
@@ -409,7 +408,7 @@ function checkBarrierSide(id, side) {
 
 }
 
-function decelOnY(id, side) {
+function decelOnY(id, dir) {
   clearInterval(activeDecInts[id].y)
   activeDecInts[id].y = null
   let changedY = false
@@ -422,12 +421,13 @@ function decelOnY(id, side) {
       activeDecInts[id].y = null
       return
     }
-    backEndPlayers[id].playerSpeed.y += dV * Math.sign(side)
-    if (!changedY && checkBarrierSide(id, side)) {
+    backEndPlayers[id].playerSpeed.y += dV * Math.sign(dir)
+    const barrierSide = checkBarrierSide(id, dir)
+    if (!changedY && barrierSide) {
       changedY = true
       factorY = -1
-      playerSocketIDs.get(id).emit('playerHitBarrier')
-      backEndPlayers[id].playerSpeed.y *= 1.05
+      playerSocketIDs.get(id).emit('playerHitSomething', ({ side:barrierSide, amount:0.5 }))
+      backEndPlayers[id].playerSpeed.y *= 0.85
     }
 
     backEndPlayers[id].y += backEndPlayers[id].playerSpeed.y * factorY
@@ -444,7 +444,7 @@ function decelOnY(id, side) {
     playerSocketIDs.get(id).broadcast.emit('updateThruster', ({ Thruster: backEndPlayers[id].thrusterOutput, id }))
   }, 15)
 }
-function decelOnX(id, side) {
+function decelOnX(id, dir) {
   clearInterval(activeDecInts[id].x)
   activeDecInts[id].x = null
   let changedX = false
@@ -457,12 +457,13 @@ function decelOnX(id, side) {
       activeDecInts[id].x = null
       return
     }
-    backEndPlayers[id].playerSpeed.x += dV * Math.sign(side)
-    if (!changedX && checkBarrierSide(id, side)) {
+    backEndPlayers[id].playerSpeed.x += dV * Math.sign(dir)
+    const barrierSide = checkBarrierSide(id, dir)
+    if (!changedX && barrierSide) {
       changedX = true
       factorX = -1
-      playerSocketIDs.get(id).emit('playerHitBarrier')
-      backEndPlayers[id].playerSpeed.x *= 1.05
+      playerSocketIDs.get(id).emit('playerHitSomething', ({ side: barrierSide, amount: 0.5 }))
+      backEndPlayers[id].playerSpeed.x *= 0.85
     }
 
     backEndPlayers[id].x += backEndPlayers[id].playerSpeed.x * factorX
@@ -480,27 +481,55 @@ function decelOnX(id, side) {
   }, 15)
 }
 
-function createParticles(array, projectile,target,min, range, velFacX = 80, velFacY = 80, part_rad,color) {
-  let thisVelFacX;
-  let thisVelFacY;
+function createParticles(array, projectile,target,min, range, side,speedFactor, part_rad,color) {
+  let vY
+  let vX
+  let partX
+  let partY
   for (let i = 1; i <= Math.round((Math.random() * range)) + min; i++) {        
-    if (velFacX >= canvas.width/*-2*PROJECTILE_RADIUS*/) thisVelFacX = -1
-    else if (velFacX < 2 * PROJECTILE_RADIUS) thisVelFacX = 1
-    else thisVelFacX = Math.pow(-1, Math.round(Math.random() + 2))
-    if (velFacY >= canvas.height /*- 2 * PROJECTILE_RADIUS*/) thisVelFacY = -1
-    else if (velFacY < 2 * PROJECTILE_RADIUS) thisVelFacY = 1
-    else thisVelFacY = Math.pow(-1, Math.round(Math.random() + 2))
-    let randomX = Math.random() * thisVelFacX
     if (Object.keys(backEndParticles).length === 0) particleId = 0
     else particleId = check2Big(particleId)
+    switch (side) {
+      case 'top':
+        vX = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor 
+        vY = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vX, 2))
+        partX = target.x
+        partY = 0
+        break
+      case 'bottom':
+        vX = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vY = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vX, 2)) * -1
+        partX = target.x
+        partY = canvas.height -0.1
+        break
+      case 'left':
+        vY = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2))
+        partX = 0.1
+        partY = target.y
+        break
+      case 'right':
+        vY = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2)) * -1
+        partX = canvas.width - 0.1
+        partY = target.y
+        break
+      case false:  
+        vY = Math.random() * Math.pow(-1, Math.floor((i - 1) / 2)) * projectile.speed * speedFactor
+        vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2)) * Math.pow(-1, i % 2)
+        partX = target.x
+        partY = target.y
+        
+    }
     array[particleId] = {
-      x: target.x, //+ projectile.velocity.x*0.5,
-      y: target.y, //+ projectile.velocity.y * 0.5,
-      radius: part_rad * ((Math.random() * 0.2) + 0.7),
+      x: partX,
+      y: partY, 
+      radius: part_rad, //* ((Math.random() * 0.15) + 0.85),
       velocity: {
-        x: randomX * 1.2,
-        y: (1 - Math.abs(randomX)) * 1.2 * thisVelFacY
+        x: vX,
+        y: vY
       },
+      rand:Math.random(),
       color,
       particleId
     }
@@ -623,11 +652,9 @@ setInterval(() => {
         const COLLISION = checkObjBarrierCollision(backEndProjectiles[id], PROJECTILE_RADIUS)
         if (COLLISION) {
           if (backEndProjectiles[id].isSpent) {
-              velFacX = backEndProjectiles[id].x
-              velFacY = backEndProjectiles[id].y
 
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 5, 2, velFacX, velFacY, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor)
-              io.emit('updateParticles', { backEndParticles, randomI: Math.random() })            
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 5, 1, COLLISION,1.8/30, PROJECTILE_RADIUS*0.7, backEndProjectiles[id].craft.mColor)
+              io.emit('updateParticles', { backEndParticles })            
               backEndProjectiles[id].isDead = true              
               io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), side: COLLISION, id })
               delete backEndProjectiles[id]
@@ -673,14 +700,18 @@ setInterval(() => {
             !backEndPlayers[playerId].isDead && !backEndPlayers[playerId].isRespawning)
             if (backEndPlayer.shield <= 0) {
               backEndPlayers[backEndProjectiles[id].playerId].score++
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 3, 1, 500, 500, radius, backEndPlayers[playerId].craft.mColor) // Particles of the player
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 6, 2, 500, 500, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor) // Particles of the projectile
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 4, 2, false,0.08, backEndPlayer.radius, backEndPlayers[playerId].craft.mColor) // Particles of the player
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 6, 2, false,0.07, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor) // Particles of the projectile
               io.emit('updateParticles', { backEndParticles })
               backEndProjectiles[id].isDead = true
               io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
               backEndPlayers[playerId].isDead = true
               backEndPlayers[playerId].isRespawning = true
               countRespawn(playerId)
+              if (backEndPlayer.x < 60) backEndPlayers[playerId].x = 60
+              else if (backEndPlayer.x > canvas.width - 60) backEndPlayers[playerId].x = canvas.width - 60
+              if (backEndPlayer.y < 60) backEndPlayers[playerId].y = 60
+              else if (backEndPlayer.y > canvas.height - 60) backEndPlayers[playerId].y = canvas.height - 60
               console.log(`${formatDate(new Date(Date.now())) } - ${backEndPlayers[playerId].username} has died! Respawning soon...` )
               io.emit('playerDies', { dyingPlayerId: playerId, shooterId: backEndProjectiles[id].playerId, rand1: Math.random() })
               delete backEndProjectiles[id]
@@ -697,8 +728,8 @@ setInterval(() => {
             }
             else {
               io.emit('playerHit', { rand1: Math.random(), rand2: Math.random(), playerId, id, shooterId: backEndProjectiles[id].playerId })
-              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 4, 2, 500, 500, PROJECTILE_RADIUS * 1.2, backEndProjectiles[id].craft.mColor)
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 4, 3, 500, 500, PROJECTILE_RADIUS * 0.9, 'hsla(205, 100%, 50%, 1)')
+              createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 4, 2, false,1.5/30, PROJECTILE_RADIUS * 0.7, backEndProjectiles[id].craft.mColor) // Projectile's particles
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 7, 7, false,1.5/30, PROJECTILE_RADIUS * 0.5, 'hsla(205, 100%, 50%, 1)') // Shield bits
               io.emit('updateParticles', { backEndParticles })
               backEndProjectiles[id].isDead = true
               io.emit('updateProjectiles', { backEndProjectiles, rand1: Math.random(), rand2: Math.random(), id })
@@ -724,53 +755,57 @@ setInterval(() => {
       switch (PLAYER_BARR_COLLISION) {
         case 'top':
           backEndPlayers[socketIDA].y = backEndPlayer.radius + 1
-          backEndPlayers[socketIDA].playerSpeed.y *= -1.05
+          backEndPlayers[socketIDA].playerSpeed.y *= -0.6
           backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].playerSpeed.y
           decelOnY(socketIDA, -2)
-          console.log('helllo')
+          if (backEndPlayers[socketIDA].playerSpeed.x != 0) {
+            backEndPlayers[socketIDA].playerSpeed.x *= 0.6
+            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x))
+          }
           break
         case 'bottom':
           backEndPlayers[socketIDA].y = canvas.height - backEndPlayer.radius - 1
-          backEndPlayers[socketIDA].playerSpeed.y *= -1.05
+          backEndPlayers[socketIDA].playerSpeed.y *= -0.6
           backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].playerSpeed.y
           decelOnY(socketIDA, 2)
+          if (backEndPlayers[socketIDA].playerSpeed.x != 0) {
+            backEndPlayers[socketIDA].playerSpeed.x *= 0.6
+            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x))
+          }
           break
         case 'left':
           backEndPlayers[socketIDA].x = backEndPlayer.radius + 1
-          backEndPlayers[socketIDA].playerSpeed.x *= -1.05
+          backEndPlayers[socketIDA].playerSpeed.x *= -0.6
           backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].playerSpeed.x
           decelOnX(socketIDA, -1)
-          console.log('stuck left')
+          if (backEndPlayers[socketIDA].playerSpeed.y != 0) {
+            backEndPlayers[socketIDA].playerSpeed.y *= 0.6
+            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * 2
+            )
+          }
           break
         case 'right':
           backEndPlayers[socketIDA].x = canvas.width - backEndPlayer.radius - 1
-          backEndPlayers[socketIDA].playerSpeed.x *= -1.05
+          backEndPlayers[socketIDA].playerSpeed.x *= -0.6
           backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].playerSpeed.x
           decelOnX(socketIDA, 1)
+          if (backEndPlayers[socketIDA].playerSpeed.y != 0) {
+            backEndPlayers[socketIDA].playerSpeed.y *= 0.6
+            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * 2
+            )
+          }
           break
       }
     }
     for (let j = i + 1; j < socketIDArray.length; j++) {
       const socketIDB = socketIDArray[j];      
-      if (checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB]) && (!backEndPlayers[socketIDA].stuck || !backEndPlayers[socketIDB].stuck)) {
+      if (checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB]) && (!backEndPlayers[socketIDA].stuck || !backEndPlayers[socketIDB].stuck)
+        && (!backEndPlayers[socketIDA].isDead && !backEndPlayers[socketIDB].isDead)) {
         backEndPlayers[socketIDA].stuck = true
         backEndPlayers[socketIDB].stuck = true
-        setTimeout(() => {
-          if (!checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB])) {
-            backEndPlayers[socketIDA].stuck = false
-            backEndPlayers[socketIDB].stuck = false
-          }
-          else {
-            let randY = (Math.random() * (canvas.height - 120) + 120)
-            backEndPlayers[socketIDA].x = 120
-            backEndPlayers[socketIDB].x = canvas.width - 120
-            backEndPlayers[socketIDA].y = randY
-            backEndPlayers[socketIDB].y = canvas.height - randY
-            io.emit('untangle', ({ id1: socketIDA, id2: socketIDB, randY }))
-            backEndPlayers[socketIDA].stuck = false
-            backEndPlayers[socketIDB].stuck = false
-          }          
-        }, 300)
+        playerSocketIDs.get(socketIDA).emit('playerHitSomething', ({ amount: 3, side: false, rand: Math.random() }))
+        playerSocketIDs.get(socketIDB).emit('playerHitSomething', ({ amount: 3, side: false, rand: Math.random() }))
+
         const finalSpeeds = computeCollisionVelocities(backEndPlayers[socketIDA].playerSpeed.x, backEndPlayers[socketIDA].playerSpeed.y, backEndPlayers[socketIDA].moveAngle,
           backEndPlayers[socketIDB].playerSpeed.x, backEndPlayers[socketIDB].playerSpeed.y, backEndPlayers[socketIDB].moveAngle)
         backEndPlayers[socketIDA].playerSpeed.x = finalSpeeds.finalVelocity1.x *1.25
@@ -779,14 +814,38 @@ setInterval(() => {
         backEndPlayers[socketIDB].playerSpeed.y = finalSpeeds.finalVelocity2.y*1.25
         backEndPlayers[socketIDA].moveAngle = Math.atan2(backEndPlayers[socketIDA].playerSpeed.y, backEndPlayers[socketIDA].playerSpeed.x)
         backEndPlayers[socketIDB].moveAngle = Math.atan2(backEndPlayers[socketIDB].playerSpeed.y, backEndPlayers[socketIDB].playerSpeed.x)
-        backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].radius * (1 + Math.sin(backEndPlayers[socketIDA].moveAngle))
-        backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].radius * (1 + Math.cos(backEndPlayers[socketIDA].moveAngle))
-        backEndPlayers[socketIDB].y += backEndPlayers[socketIDB].radius * (1 + Math.sin(backEndPlayers[socketIDB].moveAngle))
-        backEndPlayers[socketIDB].x += backEndPlayers[socketIDB].radius * (1 + Math.cos(backEndPlayers[socketIDB].moveAngle))
         decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x)*-1)
         decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y)*-2)
         decelOnX(socketIDB, Math.sign(backEndPlayers[socketIDB].playerSpeed.x)*-1)
-        decelOnY(socketIDB, Math.sign(backEndPlayers[socketIDB].playerSpeed.y)*-2)
+        decelOnY(socketIDB, Math.sign(backEndPlayers[socketIDB].playerSpeed.y) * -2)
+        setTimeout(() => {
+          if (!checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB])) {
+            backEndPlayers[socketIDA].stuck = false
+            backEndPlayers[socketIDB].stuck = false
+          }
+          else {
+            backEndPlayers[socketIDA].y += backEndPlayers[socketIDA].radius * (1 + Math.sin(backEndPlayers[socketIDA].moveAngle))
+            backEndPlayers[socketIDA].x += backEndPlayers[socketIDA].radius * (1 + Math.cos(backEndPlayers[socketIDA].moveAngle))
+            backEndPlayers[socketIDB].y += backEndPlayers[socketIDB].radius * (1 + Math.sin(backEndPlayers[socketIDA].moveAngle + Math.PI))
+            backEndPlayers[socketIDB].x += backEndPlayers[socketIDB].radius * (1 + Math.cos(backEndPlayers[socketIDA].moveAngle + Math.PI))
+            backEndPlayers[socketIDA].stuck = false
+            backEndPlayers[socketIDB].stuck = false
+            setTimeout(() => {
+              if (!checkCollision(backEndPlayers[socketIDA], backEndPlayers[socketIDB])) {
+                backEndPlayers[socketIDA].stuck = false
+                backEndPlayers[socketIDB].stuck = false
+              }
+              else {
+                let randY = (Math.random() * (canvas.height - 120) + 60)
+                backEndPlayers[socketIDA].x = 60
+                backEndPlayers[socketIDB].x = canvas.width - 60
+                backEndPlayers[socketIDA].y = randY
+                backEndPlayers[socketIDB].y = canvas.height - randY
+                io.emit('untangle', ({ id1: socketIDA, id2: socketIDB, randY }))
+              }
+            }, 300)
+          }
+        }, 300)
       }
     }
     
@@ -801,7 +860,7 @@ setInterval(() => {
 
   // Format the duration to 4 decimal places
   const timerResult = durationInMilliseconds.toFixed(4);
-  let warnTime = 2
+  let warnTime = 1
   if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now()))} - Back end ticker exceeded ${warnTime}. Execution time: ${timerResult} ms.`);
 }, 15)
 
