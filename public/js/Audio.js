@@ -1,25 +1,28 @@
+Howler.html5PoolSize = 20
+Howler.pool = 40
+
 window.sounds = {
   weapons: [
-    new Howl({ src: ['../audio/fire1.wav'], volume: 0.2, html5PoolSize: 10, html5: true}),
-    new Howl({ src: ['../audio/fire2.wav'], volume: 0.2, html5PoolSize: 10, html5: true}),
-    new Howl({ src: ['../audio/fire3.wav'], volume: 0.2, html5PoolSize: 10, html5: true}),
-    new Howl({ src: ['../audio/fire4.wav'], volume: 0.2, html5PoolSize: 10, html5: true})
+    new Howl({ src: ['../audio/fire1.wav'], volume: 0.2, html5: true}),
+    new Howl({ src: ['../audio/fire2.wav'], volume: 0.2, html5: true}),
+    new Howl({ src: ['../audio/fire3.wav'], volume: 0.2, html5: true}),
+    new Howl({ src: ['../audio/fire4.wav'], volume: 0.2, html5: true})
   ],
   shieldHit: [
-    new Howl({ src: ['../audio/shieldHit1.wav'], volume: 0.5, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/shieldHit2.wav'], volume: 0.5, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/shieldHit3.wav'], volume: 0.5, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/shieldHit4.wav'], volume: 0.5, html5PoolSize: 10, html5: true })
+    new Howl({ src: ['../audio/shieldHit1.wav'], volume: 0.5, html5: true }),
+    new Howl({ src: ['../audio/shieldHit2.wav'], volume: 0.5, html5: true }),
+    new Howl({ src: ['../audio/shieldHit3.wav'], volume: 0.5, html5: true }),
+    new Howl({ src: ['../audio/shieldHit4.wav'], volume: 0.5, html5: true })
   ],
   barrierHits: [
-    new Howl({ src: ['../audio/barrierHit1.wav'], volume: 0.3, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/barrierHit2.wav'], volume: 0.3, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/barrierHit3.wav'], volume: 0.3, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/barrierHit4.wav'], volume: 0.3, html5PoolSize: 10, html5: true })
+    new Howl({ src: ['../audio/barrierHit1.wav'], volume: 0.3, html5: true }),
+    new Howl({ src: ['../audio/barrierHit2.wav'], volume: 0.3, html5: true }),
+    new Howl({ src: ['../audio/barrierHit3.wav'], volume: 0.3, html5: true }),
+    new Howl({ src: ['../audio/barrierHit4.wav'], volume: 0.3, html5: true })
   ],
   physicalHits: [
-    new Howl({ src: ['../audio/playerHit1.wav'], volume: 0.4, html5PoolSize: 10, html5: true }),
-    new Howl({ src: ['../audio/playerHit2.wav'], volume: 0.4, html5PoolSize: 10, html5: true }),
+    new Howl({ src: ['../audio/playerHit1.wav'], volume: 0.4, html5: true }),
+    new Howl({ src: ['../audio/playerHit2.wav'], volume: 0.4, html5: true }),
   ],
   lowEnergy: new Howl({
     src: ['../audio/cantShoot.wav'],
@@ -89,10 +92,9 @@ window.sounds = {
     }
   }),
   move: new Howl({
-    src: ['../audio/ridev6.wav'],
-    volume: 0.3,
-    sprite: {main:[478,1618]},
-    loop: true,
+    src: ['../audio/ridev7.wav'],
+    volume: 0.08,
+    loop: false,
     html5: true,
     html5PoolSize: 10,
     preload: 'true'

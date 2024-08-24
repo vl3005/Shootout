@@ -144,10 +144,15 @@ worm.src = '../../img/Effect_Worm_1_421x369.png'
 worm.onload = function () { console.log('worm loaded') }
 const wrmSprite = new Sprite({ image: worm, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 421, height: 369, rows: 7, cols: 9, drawnWidth: 18, drawnHeight: 10 })
 
+const anima = new Image()
+anima.src = '../../img/Effect_Anima_1_429x437.png'
+anima.onload = function () { console.log('anima loaded') }
+const aniSprite = new Sprite({ image: anima, x: 0, y: 0, frameCount: 60, normY: 0, startFrame: 0, looped: true, OffsetY: 0, rotate: true, width: 429, height: 437, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
+
 const tentacles = new Image()
 tentacles.src = '../../img/Effect_Tentacles_1_433x337.png'
 tentacles.onload = function () { console.log('tenta loaded') }
 const tntSprite = new Sprite({ image: tentacles, x: 0, y: 0, frameCount: 63, normY: 0, startFrame: 3, looped: true, OffsetY: 0, rotate: true, width: 433, height: 337, rows: 7, cols: 9, drawnWidth: 20, drawnHeight: 10 })
 
-const trlSprites = [pwrSprite, wrmSprite, tntSprite]
+const trlSprites = [pwrSprite, wrmSprite, aniSprite]
 const hitImages = ['smallHitBlue', 'smallHitGreen', 'smallHitRed', 'smallHitYellow', 'smallHitWhite']

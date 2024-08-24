@@ -10,7 +10,7 @@ const distanceFromBg = 350
 console.log(scale)
 
 const logicalWidth = 1280
-const logicalHeight = logicalWidth * 9 / 16 
+const logicalHeight = logicalWidth * 9 / 16
 
 canvas.width = logicalWidth
 canvas.height = logicalHeight
@@ -27,14 +27,14 @@ let texcoordLocation;
 let bAngle = 0;
 const panRadius = 0.186;
 function initializeWebGL(image) {
-  
+
   gl = bCanvas.getContext('webgl2');
   //gl.scale(1 / window.devicePixelRatio, 1 / window.devicePixelRatio)
   gl.viewport(0, 0, bCanvas.width, bCanvas.height);
   if (!gl) {
     console.error('WebGL not supported');
     return;
-  }  
+  }
 
   const vertexShaderSource = `
         attribute vec4 a_position;
@@ -77,11 +77,11 @@ function initializeWebGL(image) {
     console.error('Program link error:', gl.getProgramInfoLog(program));
     return;
   }
-  gl.useProgram(program);  
+  gl.useProgram(program);
 
   // Create and set up position buffer
   positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); 
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
   const positions = [
     -1, -1,  // bottom-left
     1, -1,  // bottom-right
@@ -89,11 +89,11 @@ function initializeWebGL(image) {
     1, 1   // top-right
   ];
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
- 
+
   positionLocation = gl.getAttribLocation(program, 'a_position');
   gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-  gl.enableVertexAttribArray(positionLocation);  
-  
+  gl.enableVertexAttribArray(positionLocation);
+
 
   // Create and set up texture coordinate buffer
   texCoordBuffer = gl.createBuffer();
@@ -123,7 +123,7 @@ function initializeWebGL(image) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  
+
   return true;
 
 }
@@ -157,16 +157,15 @@ function updateTextureCoordinates() {
   if (FENDPLAYERS[SOCKET.id]) {
     const player = FENDPLAYERS[SOCKET.id];
 
-
     // Normalize player coordinates to texture space
     textureX = player.x / canvas.width / distanceFromBg;
     textureY = player.y / canvas.height / distanceFromBg;
   }
+
     // Calculate the offset
   bgX += textureX; // Center the texture around the player
   bgY += textureY; // Center the texture around the player
-  
-  
+
   //console.log(normalizedCenterX,normalizedCenterY)
   const texcoords = [
     0 + bgX, 1 + bgY,  // bottom-left
@@ -190,7 +189,7 @@ bgImage.onload = () => {
     startAnimation()
   } else {
     console.error('Failed to initialize WebGL')
-  
+
   }
 };
 
@@ -199,24 +198,16 @@ const scoreEl = document.querySelector('#scoreEl')
 window.canvasDiag = Math.hypot(canvas.width,canvas.height)
 
 const SOCKET = io()
-let thisPlayer;
-const X = canvas.width / 2
-const Y = canvas.height / 2
+const SID = SOCKET.id
 const ACTIVE_SPRITES = {};
-let actSprID = 0;
-const RESPAWNTIME = 5
-const PLAYER_RADIUS = 11
 const FENDPLAYERS = {}
 const FENDPROJECTILES = {}
 const FENDPARTICLES = {}
 const MOUSEPOSITION = {x:0,y:0}
 const ENERGYCOSTS = {shoot:6,move:0.01}
-let PLAYERSPEED = { x: 0, y: 0 }
-const PROJ_SPEED = 30
-const TOPSPEED = 7.2
-const dV = Number((TOPSPEED / 40).toFixed(2))
 const PLAYERINPUTS = []
-const MOVESOUND = {}
+let MOVESOUNDID = 0
+let alarm = {}
 const KEYS = {
   w: {
     pressed: false
@@ -234,6 +225,24 @@ const KEYS = {
   lastYKey: 'q'
 }
 
+let actSprID = 0;
+let thisPlayer;
+let PLAYERSPEED = { x: 0, y: 0 }
+let RESPAWNTIME
+let PLAYER_RADIUS
+let PROJ_SPEED
+let PROJ_RADIUS
+let RELOADTIME
+let TOPSPEED
+let dV
+let sequenceNumber = 0
+let decel = { x: false, y: false }
+let randomI = 0;
+let energyRepBuffer;
+let holdFireButton = false
+let stuckTimeout;
+
+
 Howler.mute(true)
 
 const calcAimData = () => {
@@ -243,7 +252,7 @@ const calcAimData = () => {
     x: FENDPLAYERS[SOCKET.id].x,
     y: FENDPLAYERS[SOCKET.id].y
   }
-  angle = Math.atan2(
+  let angle = Math.atan2(
     MOUSEPOSITION.y - top -8- Math.round(playerPosition.y),
     MOUSEPOSITION.x - left -8- Math.round(playerPosition.x)
   )
@@ -259,16 +268,11 @@ const calcAimData = () => {
   }))
 }
 
-let sequenceNumber = 0
-let decel = { x: false, y: false }
-let randomI = 0;
-let energyRepBuffer;
-let holdFireButton = false
-let stuckTimeout;
+
 
 
 function isWithinRange(retNum, cmpNum, range) {
-  if (Math.abs(retNum - cmpNum) <= range)
+  if (Math.abs(retNum - cmpNum) < range)
     return true
   else
     return false
@@ -285,13 +289,23 @@ function check3Big(num, obj) {
   if (num == Number.MAX_SAFE_INTEGER) {
     return 0
   }
-  else {    
+  else {
     return num+1
   }
 }
 
+SOCKET.on('getConsts',({_RESPAWNTIME,_TOPSPEED,_dV,_RELOADTIME,_PROJ_RADIUS,_PROJ_SPEED,_PLAYER_RADIUS}) => {
+  dV = _dV  
+  RESPAWNTIME = _RESPAWNTIME;
+  RELOADTIME = _RELOADTIME
+  TOPSPEED = _TOPSPEED
+  PROJ_RADIUS = _PROJ_RADIUS
+  PROJ_SPEED = _PROJ_SPEED
+  PLAYER_RADIUS = _PLAYER_RADIUS
+})
+
 SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) => {
-  
+
     const backEndProjectile = backEndProjectiles[id]
     if (!FENDPROJECTILES[id]) {
       FENDPROJECTILES[id] = new Projectile({
@@ -305,7 +319,7 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
         velocity: backEndProjectile.velocity,
         angle: backEndProjectile.angle
       })
-      sounds.weapons[Math.round(rand1 * (sounds.weapons.length - 1))].play()
+      sounds.weapons[Math.floor(rand1 * (sounds.weapons.length))].volume(0.2 * (1-backEndProjectile.distances[SOCKET.id]/canvasDiag)).play()
     } else {
       let shooterId = backEndProjectile.playerId
       FENDPROJECTILES[id].angle = backEndProjectile.angle
@@ -314,46 +328,47 @@ SOCKET.on('updateProjectiles', ({ backEndProjectiles, rand1, rand2, side, id }) 
       FENDPROJECTILES[id].velocity = backEndProjectile.velocity
       FENDPROJECTILES[id].hasRicocheted = backEndProjectile.hasRicocheted
       FENDPROJECTILES[id].ricochetPens = backEndProjectile.ricochetPens
-      //if (FENDPROJECTILES[id].hasRicocheted) sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
 
       let spriteX = FENDPROJECTILES[id].x + (rand1 - 0.5) * 8, spriteY = FENDPROJECTILES[id].y + (rand2 - 0.5) * 8;
-      
+
       switch (side) {
         case 'top': spriteY = 0; spriteX = FENDPROJECTILES[id].x; break
         case 'bottom': spriteY = canvas.height; spriteX = FENDPROJECTILES[id].x; break
         case 'left': spriteX = 0; spriteY = FENDPROJECTILES[id].y; break
         case 'right': spriteX = canvas.width; spriteY = FENDPROJECTILES[id].y; break
       }
-      if (backEndProjectile.isDead) {        
-        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
+      if (backEndProjectile.isDead) {
+        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].volume(0.5*(1-backEndProjectile.distances[SOCKET.id]/canvasDiag)).play()
         actSprID = check3Big(actSprID, ACTIVE_SPRITES)
         sprToPush = FENDPLAYERS[shooterId].splashSprite.clone()
         sprToPush.resetSprite(spriteX, spriteY, rand1 * 2 * Math.PI)
         sprToPush.drawnHeight = 50 + 30 * (1 - FENDPROJECTILES[id].distanceRatio)
         sprToPush.OffsetX = sprToPush.drawnHeight * 0.1625
         sprToPush.drawnWidth = sprToPush.drawnHeight * 1.12
-        ACTIVE_SPRITES[actSprID] = sprToPush        
+        ACTIVE_SPRITES[actSprID] = sprToPush
         delete FENDPROJECTILES[id]
         }
-      else if (side) {        
-        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
+      else if (side) {
+        sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].volume(0.5*(1-backEndProjectile.distances[SOCKET.id]/canvasDiag)).play()
         actSprID = check3Big(actSprID, ACTIVE_SPRITES)
         sprToPush = impSprite.clone()
         sprToPush.resetSprite(spriteX, spriteY, rand1*2*Math.PI)
         ACTIVE_SPRITES[actSprID] = sprToPush
-        
+
       }
-      
+
     }
-  
-  
+
+
 })
 
 SOCKET.on('playerHitSomething', ({ side, amount, rand}) => {
- 
+
   FENDPLAYERS[SOCKET.id].stuck = true
+  if (sounds.move.playing(MOVESOUNDID)) sounds.move.stop(MOVESOUNDID)
   if (!side) {
     sounds.physicalHits[Math.round(rand * (sounds.physicalHits.length - 1))].play()
+    sounds.ouch.play()
     if (FENDPLAYERS[SOCKET.id].shield > 0) {
       FENDPLAYERS[SOCKET.id].shield = Math.max(FENDPLAYERS[SOCKET.id].shield - amount, 0)
       startShieldReplinsh(SOCKET.id)
@@ -364,10 +379,10 @@ SOCKET.on('playerHitSomething', ({ side, amount, rand}) => {
     }
   } else {
     if (!sounds.ouch.playing())
-      sounds.ouch.play()  
+      sounds.ouch.play()
     if (!FENDPLAYERS[SOCKET.id].isRespawning) FENDPLAYERS[SOCKET.id].newEnergy -= amount
   }
-  
+
 
 })
 
@@ -382,7 +397,7 @@ SOCKET.on('decelerating', ({ DecelX, DecelY }) => {
 })
 
 async function logSpeed() {
-  while (decel.x && decel.y) {
+  while (decel.x || decel.y) {
     await new Promise(resolve => setTimeout(resolve, 15));
   }
 }
@@ -390,14 +405,15 @@ SOCKET.on('updateThruster', ({Thruster, id}) => {
   if (Thruster < 0.2) Thruster = 0
   FENDPLAYERS[id].thrusterOutput = Thruster
 })
-SOCKET.on('updateSpeed', ({newSpeed, id}) => {  
+SOCKET.on('updateSpeed', ({newSpeed, id}) => {
   if (SOCKET.id === id) {
-    PLAYERSPEED = newSpeed
+    PLAYERSPEED.x = Number(newSpeed.x.toFixed(2))
+    PLAYERSPEED.y = Number(newSpeed.y.toFixed(2))
   }
   else {
     FENDPLAYERS[id].thrusterOutput = Math.hypot(newSpeed.x, newSpeed.y)
   }
-  
+
 })
 
 SOCKET.on('updateText', ({text, playerId}) => {
@@ -405,8 +421,8 @@ SOCKET.on('updateText', ({text, playerId}) => {
 })
 
 SOCKET.on('updatePlayers', (backEndPlayers) => {
-  // Adding a new player... 
-  
+  // Adding a new player...
+
   for (const id in backEndPlayers) {
         const backEndPlayer = backEndPlayers[id]
 
@@ -420,6 +436,7 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
         username: backEndPlayer.username,
         isDead: false,
         socket: SOCKET,
+        fullCannonRadius: PROJ_RADIUS,
         ip: backEndPlayer.ip,
         isRespawning: false,
         radius: PLAYER_RADIUS,
@@ -465,11 +482,11 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
         y: backEndPlayer.y
       }
       FENDPLAYERS[id].stuck = backEndPlayer.stuck
-      
+
         if (id === SOCKET.id) {
           if (FENDPLAYERS[SOCKET.id].isDead)
-            sounds.alarm.stop(alarm[SOCKET.id])          
-          const lastBackendInputIndex = PLAYERINPUTS.findIndex(input => {            
+            sounds.alarm.stop(alarm[SOCKET.id])
+          const lastBackendInputIndex = PLAYERINPUTS.findIndex(input => {
             return backEndPlayer.sequenceNumber === input.sequenceNumber
           })
           if (lastBackendInputIndex > -1) PLAYERINPUTS.splice(0, lastBackendInputIndex + 1)
@@ -482,17 +499,20 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
         else {  // Update properties for all other players
           FENDPLAYERS[id].cannonRadius = backEndPlayer.cannonRadius
           FENDPLAYERS[id].angleCos = backEndPlayer.angleCos
-          FENDPLAYERS[id].angleSin = backEndPlayer.angleSin          
+          FENDPLAYERS[id].angleSin = backEndPlayer.angleSin
           FENDPLAYERS[id].energy = backEndPlayer.energy
           FENDPLAYERS[id].newEnergy = backEndPlayer.newEnergy
           FENDPLAYERS[id].aimAngle = backEndPlayer.aimAngle
           FENDPLAYERS[id].moveAngle = backEndPlayer.moveAngle
           FENDPLAYERS[id].x = backEndPlayer.x
-          FENDPLAYERS[id].y = backEndPlayer.y          
+          FENDPLAYERS[id].y = backEndPlayer.y
+          FENDPLAYERS[id].cannonX = backEndPlayer.cannonX
+          FENDPLAYERS[id].cannonY = backEndPlayer.cannonY
+          FENDPLAYERS[id].isReloading = backEndPlayer.isReloading
         }
       }
   }
-    
+
     // Delete front end players when they disconnect
     for (const id in FENDPLAYERS) {
       if (!backEndPlayers[id]) {
@@ -508,12 +528,12 @@ SOCKET.on('updatePlayers', (backEndPlayers) => {
 
 SOCKET.on('updateShieldInt', ({shield, playerId, isReplenishing }) => {
   if (shield > 100) FENDPLAYERS[playerId].shield = 100
-  else FENDPLAYERS[playerId].shield = shield  
-  FENDPLAYERS[playerId].shieldReplenish = isReplenishing  
+  else FENDPLAYERS[playerId].shield = shield
+  FENDPLAYERS[playerId].shieldReplenish = isReplenishing
 })
 
 SOCKET.on('updateParticles', ({ backEndParticles }) => {
-  
+
   for(particle in backEndParticles) {
     id = backEndParticles[particle].particleId
     if (FENDPARTICLES[id]) continue
@@ -527,10 +547,8 @@ SOCKET.on('updateParticles', ({ backEndParticles }) => {
       alpha: 1
     })
   }
-  
-})
 
-let alarm = {}
+})
 
 SOCKET.on('untangle', ({ id1, id2, randY }) => {
   actSprID = check3Big(actSprID, ACTIVE_SPRITES)
@@ -585,17 +603,16 @@ function startShieldReplinsh(playerId) {
     alarm[playerId] = sounds.alarm.play()
 }
 
-SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
-  sounds.barrierHits[Math.round(rand1 * (sounds.barrierHits.length - 1))].play()
-  sounds.shieldHit[Math.round(rand2 * (sounds.shieldHit.length - 1))].play()
-  FENDPLAYERS[playerId].shield -= FENDPROJECTILES[projId].damage  
+SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId, distances }) => {
+  sounds.shieldHit[Math.round(rand2 * (sounds.shieldHit.length - 1))].volume(0.5*(1-distances[SOCKET.id]/canvasDiag)).play()
+  FENDPLAYERS[playerId].shield -= FENDPROJECTILES[projId].damage
   let textToShow
   let jitterAmount = 8; // Range of jitter in pixels
   let jitterDuration = 0.05; // Duration of each jitter step in seconds
   let fadeOutDuration = 0.5; // Duration of fade-out in seconds
-  if (FENDPLAYERS[playerId].shield <= 0) {                                          // play dead shield sound when it drops to 0%
+  if (FENDPLAYERS[playerId].shield <= 0) {  // play dead shield sound when it drops to 0%
     FENDPLAYERS[playerId].shield = 0
-    textToShow = 'Critical HIT' 
+    textToShow = 'Critical HIT'
     sounds.playerHitBarr.play('shieldDead')
     jitterAmount = 5
     jitterDuration = 0.2
@@ -607,8 +624,8 @@ SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
     ((rand1 * 2 * FENDPLAYERS[playerId].radius) - FENDPLAYERS[playerId].radius)
   hittingProj.y = FENDPLAYERS[playerId].y +
     ((rand2 * 2 * FENDPLAYERS[playerId].radius) - FENDPLAYERS[playerId].radius)
-  
-  if (playerId === SOCKET.id || shooterId === SOCKET.id) {      
+
+  if (playerId === SOCKET.id || shooterId === SOCKET.id) {
 
     // Create a GSAP timeline
     const tl = gsap.timeline({
@@ -648,19 +665,19 @@ SOCKET.on('playerHit', ({ rand1, rand2, playerId, id: projId, shooterId }) => {
 
   }
   if (SOCKET.id == playerId)  startShieldReplinsh(playerId)
-}) 
+})
 
-SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
+SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId, distances }) => {
 
   if (FENDPLAYERS[dyingPlayerId]) {
-    
+
     actSprID = check3Big(actSprID, ACTIVE_SPRITES)
     sprToPush = explSprite.clone()
     sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y,rand1*2*Math.PI)
     ACTIVE_SPRITES[actSprID] = sprToPush
     FENDPLAYERS[dyingPlayerId].isDead = true
     dyingPlayer = FENDPLAYERS[dyingPlayerId]
-    sounds.die.play()    
+    sounds.die.volume(0.5*(1-distances[SOCKET.id]/canvasDiag)).play()
     if (shooterId === SOCKET.id) {
       let bonus = (200 - FENDPLAYERS[shooterId].newEnergy) * 0.2
       FENDPLAYERS[shooterId].newEnergy += bonus
@@ -688,7 +705,7 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
       FENDPLAYERS[dyingPlayerId].isRespawning = true
       FENDPLAYERS[dyingPlayerId].isDead = false
       FENDPLAYERS[dyingPlayerId].text = FENDPLAYERS[dyingPlayerId].username
-      
+
       actSprID = check3Big(actSprID, ACTIVE_SPRITES)
       sprToPush = vrtxSprite.clone()
       sprToPush.resetSprite(FENDPLAYERS[dyingPlayerId].x, FENDPLAYERS[dyingPlayerId].y)
@@ -701,7 +718,7 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
          SOCKET.emit('updateShield',
           ({ shield: FENDPLAYERS[dyingPlayerId].shield, playerId: dyingPlayerId, isReplenishing: FENDPLAYERS[dyingPlayerId].shieldReplenish }))
       }, 1)
-      FENDPLAYERS[dyingPlayerId].energyReplenish = setInterval(() => {        
+      FENDPLAYERS[dyingPlayerId].energyReplenish = setInterval(() => {
         FENDPLAYERS[dyingPlayerId].replenishEnergy()
         SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
       }, 10)}
@@ -718,16 +735,16 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
           FENDPLAYERS[dyingPlayerId].energy = 200
           if (dyingPlayerId === SOCKET.id) {
           clearInterval(FENDPLAYERS[dyingPlayerId].energyReplenish)
-          clearInterval(FENDPLAYERS[dyingPlayerId].shieldReplenish)          
+          clearInterval(FENDPLAYERS[dyingPlayerId].shieldReplenish)
           FENDPLAYERS[dyingPlayerId].energyReplenish = null
           FENDPLAYERS[dyingPlayerId].shieldReplenish = null
-          
+
             SOCKET.emit('updateShield',
               ({ shield: 100, playerId: dyingPlayerId, isReplenishing: null }))
           }
           gsap.killTweensOf(FENDPLAYERS[dyingPlayerId])
         }
-      })      
+      })
     }, RESPAWNTIME * 1000)
   }
 })
@@ -737,26 +754,28 @@ SOCKET.on('playerDies', ({ dyingPlayerId, rand1, shooterId }) => {
 let lastAnimationTime = 0;
 let animationPaused = false;
 let animationId
+
 function animate() {  
-  const startTime = performance.now();
+  
+    const startTime = performance.now();
   if (!glInitialized) {
     console.error('WebGL not initialized, animation stopped')
     return
-  }  
+  }
   updateTextureCoordinates()
 
   drawBackground()
   c.save()
   c.clearRect(0, 0, canvas.width, canvas.height)
-  calcAimData()  
-  
+  calcAimData()
+
 
   for (const id in FENDPLAYERS) {
     const frontEndPlayer = FENDPLAYERS[id]
     if (FENDPLAYERS[id].energy != FENDPLAYERS[id].newEnergy)
-      if (isWithinRange(FENDPLAYERS[id].energy, FENDPLAYERS[id].newEnergy, 0.38)) {      
+      if (isWithinRange(FENDPLAYERS[id].energy, FENDPLAYERS[id].newEnergy, 0.38)) {
         FENDPLAYERS[id].energy = FENDPLAYERS[id].newEnergy
-      }     
+      }
 
     if (frontEndPlayer.target && !frontEndPlayer.isDead) {
       if (decel.x) FENDPLAYERS[id].x +=
@@ -764,10 +783,10 @@ function animate() {
       if (decel.y) FENDPLAYERS[id].y +=
         (FENDPLAYERS[id].target.y - FENDPLAYERS[id].y) * 0.5
     }
-    
+
       FENDPLAYERS[id].bAngle = Math.atan2(normalizedCenterY - FENDPLAYERS[id].y, normalizedCenterX - FENDPLAYERS[id].x)
       FENDPLAYERS[id].shieldAngle += 0.004 + 0.12*(1-FENDPLAYERS[id].shield/100)
-      FENDPLAYERS[id].shieldAngle %= 2*Math.PI 
+      FENDPLAYERS[id].shieldAngle %= 2*Math.PI
       let distFromNova = Math.hypot(normalizedCenterY - FENDPLAYERS[id].y, normalizedCenterX - FENDPLAYERS[id].x)
       let lightStrength = 1 - Math.min(1450, distFromNova) / 1450
       FENDPLAYERS[id].projSpinAngle = 4000*bAngle
@@ -778,24 +797,24 @@ function animate() {
       FENDPLAYERS[id].gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');                   // Creating the gradient effect for lighting
       FENDPLAYERS[id].gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.8)');              // emitted from the main super nova on the
       FENDPLAYERS[id].gradient.addColorStop(0.8, FENDPLAYERS[id].craft.mColor);             // background image. This took a LOT of tweaking
-      FENDPLAYERS[id].gradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // so do not touch, unless you REALLY know 
+      FENDPLAYERS[id].gradient.addColorStop(0.85, 'rgba(32, 33, 33, 0.1)');                 // so do not touch, unless you REALLY know
       FENDPLAYERS[id].gradient.addColorStop(0.92, 'rgba(32, 33, 33, 0.2)');                 // what you're doing...
-      FENDPLAYERS[id].gradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');                    
+      FENDPLAYERS[id].gradient.addColorStop(1, 'rgba(32, 33, 33, 0.3)');
       if (id === SOCKET.id && FENDPLAYERS[id].energy != FENDPLAYERS[id].newEnergy) SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
-             
+
       frontEndPlayer.draw()
-      frontEndPlayer.drawEnergyWidget()           
-      frontEndPlayer.drawCannon()            
-      frontEndPlayer.drawShield()      
+      frontEndPlayer.drawEnergyWidget()
+      frontEndPlayer.drawCannon()
+      frontEndPlayer.drawShield()
       if (id === SOCKET.id) {
         frontEndPlayer.drawStats()
       }
     frontEndPlayer.drawText()
-    
-  }  
+
+  }
   c.restore()
 
-  for (const id in ACTIVE_SPRITES) {    
+  for (const id in ACTIVE_SPRITES) {
     ACTIVE_SPRITES[id].draw()
     if (ACTIVE_SPRITES[id].finished) {
       delete ACTIVE_SPRITES[id];
@@ -808,17 +827,17 @@ function animate() {
     }
   }
   let flag = false //flag to check if to update backEndParticles to delete the dead ones
-  for (const id in FENDPARTICLES) {    
+  for (const id in FENDPARTICLES) {
     const frontEndParticle = FENDPARTICLES[id]
     frontEndParticle.update()
     if (frontEndParticle.alpha <= 0) {
-      delete FENDPARTICLES[id]     
-        flag = true        
-    }    
-  }  
+      delete FENDPARTICLES[id]
+        flag = true
+    }
+  }
   //console.log(FENDPARTICLES[Object.keys(FENDPARTICLES)[Object.keys(FENDPARTICLES).length - 1]]);
 
-  if (flag) SOCKET.emit('updateBackEndParticles', FENDPARTICLES)        
+  if (flag) SOCKET.emit('updateBackEndParticles', FENDPARTICLES)
 
   const endTime = performance.now(); // End measuring time
   const frameTime = endTime - startTime; // Calculate the duration
@@ -847,7 +866,7 @@ function formatDate(date) {
 // This interval essentially acts as a double to the keydown event listener, calculates new positions to be sent to the server
 
 setInterval(() => {
-  if (FENDPLAYERS[SOCKET.id]) {    
+  if (FENDPLAYERS[SOCKET.id]) {
     if (!FENDPLAYERS[SOCKET.id].isDead) {
       if (Object.values(KEYS).some(key => key.pressed === true)) {
         let dynTopSpeed = Number((TOPSPEED / Math.sqrt(2)).toFixed(2))
@@ -855,77 +874,77 @@ setInterval(() => {
         if (Object.values(KEYS).filter(key => key.pressed === true).length === 1) {
           dynTopSpeed = TOPSPEED
           energyPenalty = Number((TOPSPEED * 0.35 * (1 - FENDPLAYERS[SOCKET.id].energy / 200)).toFixed(2))
-        }
+        }        
         else if (Object.values(KEYS).filter(key => key.pressed === true).length > 2) {
           for (const key in KEYS) key.pressed = false
         }
+        let moveString = ''
         if(!thisPlayer.isRespawning)
         {
-          console.log('here')
           if (FENDPLAYERS[SOCKET.id].newEnergy > 0) {
             FENDPLAYERS[SOCKET.id].newEnergy -= ENERGYCOSTS.move
 
           } else FENDPLAYERS[SOCKET.id].newEnergy = 0
           SOCKET.emit('updateEnergy', ({ newEnergy: FENDPLAYERS[SOCKET.id].newEnergy, energy: FENDPLAYERS[SOCKET.id].energy }))
         }
-        
+
         if (!FENDPLAYERS[SOCKET.id].stuck) {
           //     Going up W
           if (KEYS.w.pressed && KEYS.lastYKey == 'w'/* && !KEYS.a.pressed && !KEYS.d.pressed*/) {
-            sequenceNumber = check2Big(sequenceNumber)
-            if (Math.abs(PLAYERSPEED.y) < dynTopSpeed - energyPenalty) PLAYERSPEED.y -= dV
-            else PLAYERSPEED.y = -(dynTopSpeed - energyPenalty)
-            PLAYERINPUTS.push({
-              sequenceNumber,
-              dx: 0, dy: PLAYERSPEED.y
-            })
+            if (PLAYERSPEED.y > -(dynTopSpeed - energyPenalty)) PLAYERSPEED.y = Number((PLAYERSPEED.y - dV).toFixed(2));
+            else isWithinRange(PLAYERSPEED.y,-(dynTopSpeed - energyPenalty),dV) ? PLAYERSPEED.y = Number(-(dynTopSpeed - energyPenalty).toFixed(2)) :
+            PLAYERSPEED.y = Number(-(Math.sqrt(Math.pow(TOPSPEED-energyPenalty,2)-Math.pow(PLAYERSPEED.x,2))).toFixed(2));
+            moveString += 'w'
             FENDPLAYERS[SOCKET.id].y += PLAYERSPEED.y
             FENDPLAYERS[SOCKET.id].moveAngle = Math.atan2(PLAYERSPEED.y, PLAYERSPEED.x)
-            SOCKET.emit('keydown', { key: 'w', sequenceNumber, PLAYERSPEED, y: FENDPLAYERS[SOCKET.id].y, moveAngle: FENDPLAYERS[SOCKET.id].moveAngle })
           }
 
           else // Going down S
             if (KEYS.s.pressed && KEYS.lastYKey == 's' /*&&!KEYS.a.pressed && !KEYS.d.pressed*/) {
-              sequenceNumber = check2Big(sequenceNumber)
-              if (PLAYERSPEED.y < dynTopSpeed - energyPenalty) { PLAYERSPEED.y += dV; }
-              else PLAYERSPEED.y = dynTopSpeed - energyPenalty
-              PLAYERINPUTS.push({
-                sequenceNumber,
-                dx: 0, dy: PLAYERSPEED.y
-              })
+              if (PLAYERSPEED.y < dynTopSpeed - energyPenalty) { PLAYERSPEED.y = Number((PLAYERSPEED.y + dV).toFixed(2)); }
+              else isWithinRange(PLAYERSPEED.y,(dynTopSpeed - energyPenalty),dV) ? PLAYERSPEED.y = Number((dynTopSpeed - energyPenalty).toFixed(2)) :
+              PLAYERSPEED.y = Number((Math.sqrt(Math.pow(TOPSPEED-energyPenalty,2)-Math.pow(PLAYERSPEED.x,2))).toFixed(2)); //PLAYERSPEED.y = Number((PLAYERSPEED.y - dV).toFixed(2));
+              moveString += 's'
               FENDPLAYERS[SOCKET.id].y += PLAYERSPEED.y
               FENDPLAYERS[SOCKET.id].moveAngle = Math.atan2(PLAYERSPEED.y, PLAYERSPEED.x)
-              SOCKET.emit('keydown', { key: 's', sequenceNumber, PLAYERSPEED, y: FENDPLAYERS[SOCKET.id].y, moveAngle: FENDPLAYERS[SOCKET.id].moveAngle })
             }
 
           //  Going left A
           if (KEYS.a.pressed && KEYS.lastXKey == 'a'/* && !KEYS.s.pressed && !KEYS.w.pressed*/) {
-            sequenceNumber = check2Big(sequenceNumber)
-            if (Math.abs(PLAYERSPEED.x) < dynTopSpeed - energyPenalty) { PLAYERSPEED.x -= dV; }
-            else PLAYERSPEED.x = -(dynTopSpeed - energyPenalty)
+            if (PLAYERSPEED.x > -(dynTopSpeed - energyPenalty)) {PLAYERSPEED.x = Number((PLAYERSPEED.x - dV).toFixed(2));}
+            else isWithinRange(PLAYERSPEED.x,-(dynTopSpeed - energyPenalty),dV) ? PLAYERSPEED.x = Number(-(dynTopSpeed - energyPenalty).toFixed(2)) : PLAYERSPEED.x = Number((PLAYERSPEED.x + dV).toFixed(2));
             FENDPLAYERS[SOCKET.id].x += PLAYERSPEED.x
-            PLAYERINPUTS.push({
-              sequenceNumber,
-              dx: PLAYERSPEED.x, dy: 0
-            })
+            moveString += 'a'
             FENDPLAYERS[SOCKET.id].moveAngle = Math.atan2(PLAYERSPEED.y, PLAYERSPEED.x)
-            SOCKET.emit('keydown', { key: 'a', sequenceNumber, PLAYERSPEED, x: FENDPLAYERS[SOCKET.id].x, moveAngle: FENDPLAYERS[SOCKET.id].moveAngle })
           }
 
           else    // Going right D
             if (KEYS.d.pressed && KEYS.lastXKey == 'd' /*&& !KEYS.s.pressed && !KEYS.w.pressed*/) {
-              sequenceNumber = check2Big(sequenceNumber)
 
-              if (PLAYERSPEED.x < dynTopSpeed - energyPenalty) { PLAYERSPEED.x += dV; }
-              else PLAYERSPEED.x = dynTopSpeed - energyPenalty
-              PLAYERINPUTS.push({
-                sequenceNumber,
-                dx: PLAYERSPEED.x, dy: 0
-              })
+              if (PLAYERSPEED.x < dynTopSpeed - energyPenalty) { PLAYERSPEED.x = Number((PLAYERSPEED.x + dV).toFixed(2)); }
+              else isWithinRange(PLAYERSPEED.x,(dynTopSpeed - energyPenalty),dV) ? PLAYERSPEED.x = Number((dynTopSpeed - energyPenalty).toFixed(2)) : PLAYERSPEED.x = Number((PLAYERSPEED.x - dV).toFixed(2));
               FENDPLAYERS[SOCKET.id].x += PLAYERSPEED.x
+              moveString += 'd'
               FENDPLAYERS[SOCKET.id].moveAngle = Math.atan2(PLAYERSPEED.y, PLAYERSPEED.x)
-              SOCKET.emit('keydown', { key: 'd', sequenceNumber, PLAYERSPEED, x: FENDPLAYERS[SOCKET.id].x, moveAngle: FENDPLAYERS[SOCKET.id].moveAngle })
             }
+          if (sounds.move.seek(MOVESOUNDID)>=8.28) {
+            sounds.move.seek(8.92-sounds.move.seek(MOVESOUNDID),MOVESOUNDID)            
+          }
+          sequenceNumber = check2Big(sequenceNumber)
+          if (moveString.includes('a') || moveString.includes('d')){
+            PLAYERINPUTS.push({
+              sequenceNumber,
+              dx: PLAYERSPEED.x, dy: 0
+            })
+            if (moveString.includes('w') || moveString.includes('s'))
+              PLAYERINPUTS[PLAYERINPUTS.length-1].dy = PLAYERSPEED.y
+          } else {
+            PLAYERINPUTS.push({
+              sequenceNumber,
+              dx: 0, dy: PLAYERSPEED.y
+            })
+          }
+          SOCKET.emit('keydown', { key: moveString, sequenceNumber, PLAYERSPEED, x: FENDPLAYERS[SOCKET.id].x, y: FENDPLAYERS[SOCKET.id].y, moveAngle: FENDPLAYERS[SOCKET.id].moveAngle })
           FENDPLAYERS[SOCKET.id].thrusterOutput = Math.hypot(PLAYERSPEED.x, PLAYERSPEED.y)
         } else // if STUCK
         {
@@ -933,7 +952,7 @@ setInterval(() => {
         }
       }
       else {
-        
+
         if (!decel.x) PLAYERSPEED.x = 0
         if (!decel.y) PLAYERSPEED.y = 0
         FENDPLAYERS[SOCKET.id].thrusterOutput = Math.hypot(PLAYERSPEED.x, PLAYERSPEED.y)
@@ -952,7 +971,6 @@ document.querySelector('#usernameForm').addEventListener('submit', (event) => {
     playerSpeed: { x: 0, y: 0 },
     x: textureX * canvas.width * distanceFromBg,
     y: textureY * canvas.height * distanceFromBg,
-    radius: PLAYER_RADIUS,
     devicePixelRatio,
     RESPAWNTIME,
     FEdV: dV

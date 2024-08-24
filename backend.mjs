@@ -7,20 +7,24 @@ import { fileURLToPath } from 'url';
 import path, { dirname } from 'path';
 import { setInterval } from 'timers'
 
+import fs from 'fs'
+import { send } from 'process';
+
+// Set the log file path
 const app = express()
 const port = 3000
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const logFilePath = path.join(__dirname, 'event-log.txt');
+const maxFileSize = 2 * 1024 * 1024;
 
 
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/*', (req, res) => {
-  console.log('get function');
+app.get('/', (req, res) => {
+  console.log(`GET:${req} RES: ${res} `);
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
-
+app.use(express.static(path.join(__dirname, 'public')));
 
 const server = http.createServer(app)
 
@@ -34,32 +38,37 @@ const io = new Server(server, { pingInterval: 2000, pingTimeout: 5000 })
 const crafts = [
   { name: 'Void Raptor',      mColor: '#000000', /* Black */        sColor: '#f54242', aColor: '#FFFFFF', inUse: false, trlType: 1, hitType: 2 },
   { name: 'Strato-Seeker',    mColor: '#6f7dfc', /* Sky blue */     sColor: '#f54242', aColor: '#000000', inUse: false, trlType: 2, hitType: 2 },
+  { name: 'Aurora Vitae',     mColor: '#1f2c9e', /* Navy blue */    sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 2, hitType: 1 },
   { name: 'Solar Falcon',     mColor: '#ffd700', /* Gold Yellow */  sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 0, hitType: 0 },
   { name: 'Crimson Comet',    mColor: '#ff0d15', /* Red */          sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 2, hitType: 1 },
-  { name: 'Emerald Vortex',   mColor: '#18fc03', /* Green */        sColor: '#f5f542', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
-  { name: 'Nebula Blossom',   mColor: '#fc79d1', /* Baby Pink */    sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 2, hitType: 1 },
+  { name: 'Emerald Vortex',   mColor: '#18fc03', /* Green */        sColor: '#ffd700', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
+  { name: 'Nebula Blossom',   mColor: '#fc79d1', /* Baby Pink */    sColor: '#ffffff', aColor: '#000000', inUse: false, trlType: 2, hitType: 4 },
   { name: 'Stellar Rose',     mColor: '#f707a3', /* Pink */         sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 0, hitType: 0 },
-  { name: 'Aqua Spirit',      mColor: '#00ffd7', /* Light Teal */   sColor: '#f5f542', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
+  { name: 'Aqua Spirit',      mColor: '#00ffd7', /* Light Teal */   sColor: '#ffd700', aColor: '#000000', inUse: false, trlType: 1, hitType: 3 },
   { name: 'Cosmic Mirage',    mColor: '#880a91', /* Purple */       sColor: '#ffffff', aColor: '#000000', inUse: false, trlType: 2, hitType: 4 },
   { name: 'Nova Flare',       mColor: '#ff9e00', /* Orange */       sColor: '#ffffff', aColor: '#000000', inUse: false, trlType: 0, hitType: 4 },
   { name: 'Lunar Phantom',    mColor: '#969696', /* Silver */       sColor: '#f54242', aColor: '#000000', inUse: false, trlType: 2, hitType: 2 },
   { name: 'Arid Voyager',     mColor: '#947944', /* Tan */          sColor: '#7dabf5', aColor: '#000000', inUse: false, trlType: 1, hitType: 0 },
   { name: 'Galactic Spectre', mColor: '#ffffff', /* White */        sColor: '#42f55a', aColor: '#000000', inUse: false, trlType: 0, hitType: 1 },
 ]
-
+const eventStats = {};
 const backEndPlayers = {}
 const backEndProjectiles = {}
 const backEndParticles = {}
 const playerSocketIDs = new Map()
-let socketIDArray = Array.from(playerSocketIDs.keys())
+const RESPAWNTIME = 5
+const PROJECTILE_RADIUS = 3.2
+const PLAYER_RADIUS = 11
+const RELOADTIME = 150
+const TOPSPEED = 7.2
+const PROJ_SPEED = 30
+const dV = Number((TOPSPEED / 40).toFixed(2))
 const activeDecInts = {}
+let socketIDArray = Array.from(playerSocketIDs.keys())
 let backEndPlayer;
 let canvas = {}
-let backEndRespawnTime;
-const PROJECTILE_RADIUS = 4
 let projectileId = 0
 let particleId = 0
-let dV;
 let newBAngle=Math.random() * 2*Math.PI;
 
 function check2Big(num) {
@@ -75,7 +84,7 @@ function checkCollision(playerA, playerB) {
   const dx = playerA.x - playerB.x; 
   const dy = playerA.y - playerB.y; 
   const distance = Math.hypot(dx, dy); 
-  const factor = playerA.shield * playerB.shield/10000 * 30
+  const factor = 40*playerA.shield * playerB.shield/10000
   return distance < (2*playerA.radius+factor); // Collision if distance < sum of radii
 }
 function siftArray(arr, property) {
@@ -91,9 +100,39 @@ io.on('connection', (SOCKET) => {
   if (temp.startsWith('::ffff:')) {
     ip = temp.split(':').pop();  // Extract the IPv4 part
   } else ip = temp
+  SOCKET.use((packet, next) => {
+    const eventName = packet[0];
+    const packetSize = JSON.stringify(packet).length;
+    const startTime = Date.now(); // Time when the event is received
 
+    if (!eventStats[eventName]) {
+        eventStats[eventName] = {
+            username: backEndPlayers[SOCKET.id]?.username || ip,
+            count: 0,
+            totalSize: 0,
+            totalLatency: 0 // Initialize total latency
+        };
+    }
+
+    eventStats[eventName].count++;
+    eventStats[eventName].totalSize += packetSize;
+
+    next();
+
+    const latency = Date.now() - startTime; // Calculate latency
+    eventStats[eventName].totalLatency += latency;
+});
   console.log(`${formatDate(new Date(Date.now())) } - New connection from IP: ${ip}`);
-  SOCKET.emit('getNewAngle', newBAngle)
+  SOCKET.emit('getConsts', ({
+    newBAngle,
+    _dV:dV,
+    _RELOADTIME:RELOADTIME,
+    _RESPAWNTIME:RESPAWNTIME,
+    _TOPSPEED:TOPSPEED,
+    _PROJ_RADIUS:PROJECTILE_RADIUS,
+    _PLAYER_RADIUS:PLAYER_RADIUS,
+    _PROJ_SPEED:PROJ_SPEED
+  }))
 
   SOCKET.on('disconnecting', (reason) => {
     console.log(`${formatDate(new Date(Date.now())) } - Disconnect event triggered for socket: ${SOCKET.id}, because ${reason}`);
@@ -120,7 +159,7 @@ io.on('connection', (SOCKET) => {
 
   io.emit('updatePlayers', backEndPlayers)
 
-  SOCKET.on('shoot', ({ x, y, angle, PROJ_SPEED }) => {
+  SOCKET.on('shoot', ({ x, y, angle }) => {
     if (backEndPlayers[SOCKET.id]){
     if (Object.keys(backEndProjectiles).length === 0) projectileId = 0
     else projectileId = check2Big(projectileId)
@@ -134,12 +173,18 @@ io.on('connection', (SOCKET) => {
       craft: backEndPlayers[SOCKET.id].craft,
       hasRicocheted: false,
       isSpent: false,
+      distances:{},
       willHit: false,
       isDead: false,
       ricochetPens: 0,
       radius: PROJECTILE_RADIUS,
       angle
       }
+      for (const playerId in backEndPlayers) {
+        const backEndPlayer = backEndPlayers[playerId]
+        backEndProjectiles[projectileId].distances[playerId] = Math.floor(Math.hypot(backEndProjectiles[projectileId].x - backEndPlayer.x,
+          backEndProjectiles[projectileId].y - backEndPlayer.y))
+        }
     }
   })
   SOCKET.on('spentProjectile', ({ id }) => {
@@ -166,11 +211,10 @@ io.on('connection', (SOCKET) => {
       SOCKET.broadcast.emit('updateShieldInt', { shield, playerId, isReplenishing });
     }
     });
-  SOCKET.on('initGame', ({ width, height, x, y, username, FEdV, isDead = false, radius, isRespawning, RESPAWNTIME, playerSpeed }) => {
+  SOCKET.on('initGame', ({ width, height, x, y, username }) => {
     canvas = {
       width, height
     }
-    dV = FEdV
     activeDecInts[SOCKET.id] = { x: null, y: null }
     let rand = [];
     let chosenCraftIndex = 0;
@@ -192,7 +236,7 @@ io.on('connection', (SOCKET) => {
       username,
       stuck: false,
       text: username,
-      isDead,      
+      isDead: false,      
       onMap: false,
       ip,
       thrusterOutput:0,
@@ -203,11 +247,11 @@ io.on('connection', (SOCKET) => {
       angleSin: 1,
       angleCos: 1,
       aimAngle: 0,
-      isRespawning,
+      isRespawning: false,
       cannonRadius: 4,
-      radius,
+      radius:PLAYER_RADIUS,
       moveAngle: 0,
-      playerSpeed,
+      playerSpeed:{x:0,y:0},
       shield: 100,
       isReplenishing: null,
       rand
@@ -217,7 +261,6 @@ io.on('connection', (SOCKET) => {
     crafts[chosenCraftIndex].inUse = true
     console.log(playerSocketIDs,socketIDArray)
     console.log(`${ formatDate(new Date(Date.now()))} - ${backEndPlayers[SOCKET.id].ip}'s name is ${backEndPlayers[SOCKET.id].username}`)
-    backEndRespawnTime = RESPAWNTIME   
 
 
   })
@@ -227,7 +270,7 @@ io.on('connection', (SOCKET) => {
     backEndPlayers[SOCKET.id].angleSin = angleSin
     backEndPlayers[SOCKET.id].aimAngle = angle
   })
-  SOCKET.on('updateCannonRadius', (cannonRadius) => {
+  SOCKET.on('updateCannonRadius', ({cannonRadius, cannonX, cannonY, isReloading}) => {
     if (!backEndPlayers[SOCKET.id] ||backEndPlayers[SOCKET.id].isDead) {
       try {
         clearInterval(activeDecInts[SOCKET.id].y)
@@ -239,6 +282,9 @@ io.on('connection', (SOCKET) => {
       return
     }
     backEndPlayers[SOCKET.id].cannonRadius = cannonRadius
+    backEndPlayers[SOCKET.id].cannonX = cannonX
+    backEndPlayers[SOCKET.id].cannonY = cannonY
+    backEndPlayers[SOCKET.id].isReloading = isReloading
   })
   SOCKET.on('updateBackEndParticles', (frontEndParticles) => {
     for (const id in backEndParticles) {
@@ -258,37 +304,21 @@ io.on('connection', (SOCKET) => {
     let changedYDir = speedChanged(backEndPlayer.playerSpeed.y, PLAYERSPEED.y)
     backEndPlayers[SOCKET.id].playerSpeed = PLAYERSPEED
     //console.log(key)
-
-    switch (key) {
-      case 'w':
-        if (!changedYDir) {
-          clearInterval(activeDecInts[SOCKET.id].y)
-          activeDecInts[SOCKET.id].y = null
-        }
-        backEndPlayers[SOCKET.id].y = y
-        break
-      case 's':
-        if (!changedYDir) {
-          clearInterval(activeDecInts[SOCKET.id].y)
-          activeDecInts[SOCKET.id].y = null
-        }
-        backEndPlayers[SOCKET.id].y = y
-        break
-      case 'a':
-        if (!changedXDir) {
-          clearInterval(activeDecInts[SOCKET.id].x)
-          activeDecInts[SOCKET.id].x = null
-        }
-        backEndPlayers[SOCKET.id].x = x
-        break
-      case 'd':
-        if (!changedXDir) {
-          clearInterval(activeDecInts[SOCKET.id].x)
-          activeDecInts[SOCKET.id].x = null
-        }
-        backEndPlayers[SOCKET.id].x = x
-        break
+    if (key.includes('a') || key.includes('d')){
+      if (!changedXDir) {
+        clearInterval(activeDecInts[SOCKET.id].x)
+        activeDecInts[SOCKET.id].x = null
+      }
+      backEndPlayers[SOCKET.id].x = x
+     }
+    if (key.includes('w') || key.includes('s')){
+      if (!changedYDir) {
+        clearInterval(activeDecInts[SOCKET.id].y)
+        activeDecInts[SOCKET.id].y = null
+      }
+      backEndPlayers[SOCKET.id].y = y
     }
+    
     SOCKET.broadcast.emit('updateThruster', ({Thruster:backEndPlayers[SOCKET.id].thrusterOutput, id:SOCKET.id}))
     const playerSides = {
       left: backEndPlayer.x - backEndPlayer.radius,
@@ -331,7 +361,7 @@ io.on('connection', (SOCKET) => {
     // Format the duration to 4 decimal places
     const timerResult = durationInMilliseconds.toFixed(4);
     let warnTime = 0.2
-    if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now()))} - KeyDown time: ${timerResult} ms`);
+    if (timerResult > warnTime) sendToFile(`${formatDate(new Date(Date.now()))};${backEndPlayer.username};Key Down;;;;${timerResult}`);
 
   })
   
@@ -370,6 +400,21 @@ io.on('connection', (SOCKET) => {
       }
     })
 })
+function trimLogFile() {
+  fs.readFile(logFilePath, 'utf8', (err, data) => {
+    if (err) throw err;
+
+    const lines = data.split('\n');
+    if (lines.length > 20) {
+        const trimmedData = lines.slice(20).join('\n');
+
+        fs.writeFile(logFilePath, trimmedData, (err) => {
+            if (err) throw err;
+            console.log(`Log file trimmed by removing the first ${20} lines.`);
+        });
+    }
+});
+}
 function speedChanged(old, current) {
   if (Math.sign(old) == Math.sign(current)) return false
   else return true
@@ -491,31 +536,31 @@ function createParticles(array, projectile,target,min, range, side,speedFactor, 
     else particleId = check2Big(particleId)
     switch (side) {
       case 'top':
-        vX = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor 
+        vX = (Math.random()*0.9+0.05) * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor 
         vY = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vX, 2))
         partX = target.x
-        partY = 0
+        partY = 0.1
         break
       case 'bottom':
-        vX = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vX = (Math.random()*0.9+0.05) * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
         vY = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vX, 2)) * -1
         partX = target.x
         partY = canvas.height -0.1
         break
       case 'left':
-        vY = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vY = (Math.random()*0.9+0.05) * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
         vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2))
         partX = 0.1
         partY = target.y
         break
       case 'right':
-        vY = Math.random() * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
+        vY = (Math.random()*0.9+0.05) * Math.sign(Math.pow(-1, i)) * projectile.speed * speedFactor
         vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2)) * -1
         partX = canvas.width - 0.1
         partY = target.y
         break
       case false:  
-        vY = Math.random() * Math.pow(-1, Math.floor((i - 1) / 2)) * projectile.speed * speedFactor
+        vY = (Math.random()*0.9+0.05) * Math.pow(-1, Math.floor((i - 1) / 2)) * projectile.speed * speedFactor
         vX = Math.sqrt(Math.pow(projectile.speed * speedFactor, 2) - Math.pow(vY, 2)) * Math.pow(-1, i % 2)
         partX = target.x
         partY = target.y
@@ -542,7 +587,7 @@ function sleep(ms) {
 
 async function countRespawn(playerId) {
 
-  for (let i = backEndRespawnTime; i > 0; i--) {
+  for (let i = RESPAWNTIME; i > 0; i--) {
     if (!backEndPlayers[playerId]) break;
     backEndPlayers[playerId].text = `[ ${i} ]`;
     console.log(`${formatDate(new Date(Date.now()))} - ${backEndPlayers[playerId].username}'s respawning in ${i}...`)
@@ -645,8 +690,16 @@ setInterval(() => {
     for (let i = 0; i < PROJ_INCREMENTS; i++)
       if (backEndProjectiles[id]) {
         backEndProjectiles[id].x += backEndProjectiles[id].velocity.x / PROJ_INCREMENTS
-        backEndProjectiles[id].y += backEndProjectiles[id].velocity.y / PROJ_INCREMENTS
-
+        backEndProjectiles[id].y += backEndProjectiles[id].velocity.y / PROJ_INCREMENTS  
+        
+        // First get the distances for front end uses
+        
+        for (const playerId in backEndPlayers) {
+          const backEndPlayer = backEndPlayers[playerId]
+          backEndProjectiles[id].distances[playerId] = Math.floor(Math.hypot(backEndProjectiles[id].x - backEndPlayer.x,
+            backEndProjectiles[id].y - backEndPlayer.y))
+          }
+  
         //  Projectile on Barrier Hit detection
 
         const COLLISION = checkObjBarrierCollision(backEndProjectiles[id], PROJECTILE_RADIUS)
@@ -693,14 +746,12 @@ setInterval(() => {
         for (const playerId in backEndPlayers) {
           const backEndPlayer = backEndPlayers[playerId]
           const hitCircle = PROJECTILE_RADIUS + backEndPlayer.radius + 14 * (backEndPlayer.shield / 100)
-          const DISTANCE = Math.floor(Math.hypot(backEndProjectiles[id].x - backEndPlayer.x,
-            backEndProjectiles[id].y - backEndPlayer.y))
 
-          if (DISTANCE <= hitCircle && backEndProjectiles[id].playerId !== playerId &&
+          if (backEndProjectiles[id].distances[playerId] <= hitCircle && backEndProjectiles[id].playerId !== playerId &&
             !backEndPlayers[playerId].isDead && !backEndPlayers[playerId].isRespawning)
             if (backEndPlayer.shield <= 0) {
               backEndPlayers[backEndProjectiles[id].playerId].score++
-              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 4, 2, false,0.08, backEndPlayer.radius, backEndPlayers[playerId].craft.mColor) // Particles of the player
+              createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 5, 2, false,0.08, backEndPlayer.radius, backEndPlayers[playerId].craft.mColor) // Particles of the player
               createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 6, 2, false,0.07, PROJECTILE_RADIUS, backEndProjectiles[id].craft.mColor) // Particles of the projectile
               io.emit('updateParticles', { backEndParticles })
               backEndProjectiles[id].isDead = true
@@ -713,21 +764,21 @@ setInterval(() => {
               if (backEndPlayer.y < 60) backEndPlayers[playerId].y = 60
               else if (backEndPlayer.y > canvas.height - 60) backEndPlayers[playerId].y = canvas.height - 60
               console.log(`${formatDate(new Date(Date.now())) } - ${backEndPlayers[playerId].username} has died! Respawning soon...` )
-              io.emit('playerDies', { dyingPlayerId: playerId, shooterId: backEndProjectiles[id].playerId, rand1: Math.random() })
+              io.emit('playerDies', { dyingPlayerId: playerId, shooterId: backEndProjectiles[id].playerId, rand1: Math.random(), distances:backEndProjectiles[id].distances })
               delete backEndProjectiles[id]
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return
                 backEndPlayers[playerId].isDead = false
                 console.log(`${formatDate(new Date(Date.now()))} - ${backEndPlayers[playerId].username} is alive again!`)
-              }, backEndRespawnTime * 1000)
+              }, RESPAWNTIME * 1000)
               setTimeout(() => {
                 if (!backEndPlayers[playerId]) return
                 backEndPlayers[playerId].isRespawning = false
-              }, (backEndRespawnTime + 3) * 1000)
+              }, (RESPAWNTIME + 3) * 1000)
               break
             }
             else {
-              io.emit('playerHit', { rand1: Math.random(), rand2: Math.random(), playerId, id, shooterId: backEndProjectiles[id].playerId })
+              io.emit('playerHit', { rand1: Math.random(), rand2: Math.random(), playerId, id, shooterId: backEndProjectiles[id].playerId, distances:backEndProjectiles[id].distances })
               createParticles(backEndParticles, backEndProjectiles[id], backEndProjectiles[id], 4, 2, false,1.5/30, PROJECTILE_RADIUS * 0.7, backEndProjectiles[id].craft.mColor) // Projectile's particles
               createParticles(backEndParticles, backEndProjectiles[id], backEndPlayers[playerId], 7, 7, false,1.5/30, PROJECTILE_RADIUS * 0.5, 'hsla(205, 100%, 50%, 1)') // Shield bits
               io.emit('updateParticles', { backEndParticles })
@@ -760,7 +811,7 @@ setInterval(() => {
           decelOnY(socketIDA, -2)
           if (backEndPlayers[socketIDA].playerSpeed.x != 0) {
             backEndPlayers[socketIDA].playerSpeed.x *= 0.6
-            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x))
+            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x)*-1)
           }
           break
         case 'bottom':
@@ -770,7 +821,7 @@ setInterval(() => {
           decelOnY(socketIDA, 2)
           if (backEndPlayers[socketIDA].playerSpeed.x != 0) {
             backEndPlayers[socketIDA].playerSpeed.x *= 0.6
-            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x))
+            decelOnX(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.x)*-1)
           }
           break
         case 'left':
@@ -780,8 +831,7 @@ setInterval(() => {
           decelOnX(socketIDA, -1)
           if (backEndPlayers[socketIDA].playerSpeed.y != 0) {
             backEndPlayers[socketIDA].playerSpeed.y *= 0.6
-            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * 2
-            )
+            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * -2)
           }
           break
         case 'right':
@@ -791,8 +841,7 @@ setInterval(() => {
           decelOnX(socketIDA, 1)
           if (backEndPlayers[socketIDA].playerSpeed.y != 0) {
             backEndPlayers[socketIDA].playerSpeed.y *= 0.6
-            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * 2
-            )
+            decelOnY(socketIDA, Math.sign(backEndPlayers[socketIDA].playerSpeed.y) * -2)
           }
           break
       }
@@ -858,9 +907,45 @@ setInterval(() => {
   const end = process.hrtime.bigint(); // End timer
   const durationInMilliseconds = (Number(end - start)) / 1000000;
 
-  // Format the duration to 4 decimal places
   const timerResult = durationInMilliseconds.toFixed(4);
   let warnTime = 1
-  if (timerResult > warnTime) console.log(`${formatDate(new Date(Date.now()))} - Back end ticker exceeded ${warnTime}. Execution time: ${timerResult} ms.`);
+  if (timerResult > warnTime) sendToFile(`${formatDate(new Date(Date.now()))};server;Back end ticker;Exceeded ${warnTime} ms;;${timerResult}`);
 }, 15)
 
+function sendToFile(text){
+  fs.appendFile(logFilePath, text, (err) => {
+    if (err) throw err;
+
+    fs.stat(logFilePath, (err, stats) => {
+        if (err) throw err;
+
+        if (stats.size > maxFileSize) {
+            trimLogFile();
+        }
+    });
+  })
+}
+
+setInterval(() => {
+  let totalCount = 0;
+  let totalSize = 0;
+  let totalLatency = 0;
+  let logMessage = '';
+
+  for (const eventName in eventStats) {
+      const stats = eventStats[eventName];
+      if (stats.count === 0) continue
+      const avgLatency = (stats.totalLatency / stats.count).toFixed(2); // Average latency
+
+      logMessage += `${formatDate(new Date(Date.now()))};${stats.username};${eventName};${stats.count};${stats.totalSize};${avgLatency}\n`;
+      totalCount += stats.count;
+      totalSize += stats.totalSize;
+      totalLatency += stats.totalLatency;
+
+      eventStats[eventName].count = 0
+  }
+
+
+  if (!logMessage) return
+  sendToFile(logMessage)
+}, 1000);

@@ -1,11 +1,8 @@
 let keyHeld = false
-let moveCrosshair = false
-let moveTimeout
-let RELOADTIME = 150
+
 let justClicked = false
 
 let playerPosition
-let angle
 let startTime = 0
 
 document.addEventListener('keydown', (event) => {
@@ -61,17 +58,17 @@ document.addEventListener('keydown', (event) => {
       default:
           return
   }  
-  if (keyHeld && !thisPlayer.isRespawning) {
-    clearInterval(thisPlayer.energyReplenish)
-    thisPlayer.energyReplenish = null
+  if (keyHeld) {
+    if (!thisPlayer.isRespawning)  
+      {
+        clearInterval(thisPlayer.energyReplenish)
+        thisPlayer.energyReplenish = null
+      }
     
-    if (!sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
-      MOVESOUND[thisPlayer.socket.id] = sounds.move.volume(0).play('main')
-      sounds.move.once('play', () => {
-        sounds.move.rate(0.8, MOVESOUND[thisPlayer.socket.id])
-        sounds.move.fade(0, 0.4, 250, MOVESOUND[thisPlayer.socket.id]);
-      }, MOVESOUND[thisPlayer.socket.id]);
+    if (!sounds.move.playing(MOVESOUNDID) && !FENDPLAYERS[SOCKET.id].stuck){
+      MOVESOUNDID = sounds.move.play()
     }
+    
   }
   //startTime = Date.now()
 })
@@ -116,13 +113,11 @@ document.addEventListener('keyup', (event) => {
     if (!thisPlayer.newEnergy > 0 && !thisPlayer.isRespawning)  // If player's energy drops below zero from movement spending, bring it back to 0
       thisPlayer.newEnergy = 0
 
-    if (sounds.move.playing(MOVESOUND[thisPlayer.socket.id])) {
-      sounds.move.fade(0.4, 0.0, 250, MOVESOUND[thisPlayer.socket.id])
-        .once('fade', () => {
-          sounds.move.stop(MOVESOUND[thisPlayer.socket.id]);
-        });
+    if (sounds.move.seek(MOVESOUNDID)>=0.53)
+      sounds.move.seek(8.390,MOVESOUNDID)
+    else
+      sounds.move.seek(8.920-sounds.move.seek(MOVESOUNDID),MOVESOUNDID)
 
-    }
     thisPlayer.moveAngle += Math.PI
     thisPlayer.moveAngle %= 2*Math.PI    
     if (thisPlayer.energyReplenish == null && energyRepBuffer == null) {
@@ -156,8 +151,7 @@ async function emitShoot() {
     SOCKET.emit('shoot', {
       x: thisPlayer.cannonX,
       y: thisPlayer.cannonY,
-      angle: thisPlayer.aimAngle,
-      PROJ_SPEED
+      angle: thisPlayer.aimAngle
     })
     thisPlayer.reload(RELOADTIME, ENERGYCOSTS.shoot)
     startEnergyReplenish(1900)
